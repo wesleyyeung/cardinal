@@ -2,4 +2,8 @@
 .DS_store
 __pycache__
 *.csv
-*.yml
+.secret
+.env
+archive
+test.ipynb
+generate_schema.py

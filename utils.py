@@ -2,12 +2,25 @@ from collections import defaultdict
 import hashlib
 import re
 import yaml
+from sqlalchemy import create_engine
 
-def sanitize_table_name(fname):
+def get_engine(config_path="config/.env"):
+        with open(config_path, "r") as file:
+            cfg = yaml.safe_load(file)
+        db_url = f"postgresql+psycopg2://{cfg['user']}:{cfg['password']}@{cfg['host']}:{cfg['port']}/{cfg['database']}"
+        return create_engine(db_url)
+
+# Precompile patterns as a single regex for performance
+NRIC_REGEX = re.compile(r'^[a-zA-Z]{1,2}[0-9]{7}[a-zA-Z]?$')
+
+def redact_nric(cell):
+    s = str(cell)
+    if NRIC_REGEX.match(s):
+        return '[REDACTED]'
+    return cell
+
+def sanitize_table_name(fname: str) -> str:
     return re.sub(r"\.csv$", "", fname.lower()).replace(" ", "_").replace("-","_")
-
-def hash_sha1(input_string,start_idx=20,output_length=10):
-    return hashlib.sha1(str.encode(input_string)).hexdigest()[start_idx:start_idx+output_length]
 
 def flatten(xss):
     return [x for xs in xss for x in xs]
@@ -49,54 +62,22 @@ def remap_value_fast(input_string: str, reverse_mapper: dict) -> list:
 
 class ColumnNameSanitizer():
      
-    def __init__(self,abbreviations=True):
-        if abbreviations:
-            self.ABBREVIATIONS = {
-            'resting':'',
-            'ecg':'',
-            'interpretation': 'interp',
-            'interpretations': 'interp',
-            'statement': 'stmt',
-            'components': 'comps',
-            'coded': 'cd',
-            'structure': 'struct',
-            'datastructure': 'struct',
-            'restingecgdata': 'restecg',
-            'value': 'val',
-            'entry': '',
-            'data': '',
-            'generalpatientdata': '',
-            'information': 'info',
-            'interpretationdatastructure': '',
-            'statementcomponents':'stmtcomp',
-            'reportinfo':'',
-            'reportformat':'',
-            'dataacquisition':'datacq',
-            'signalcharacteristics':'sigcharct',
-            'patientmedicaldata':'meddat',
-            'bloodpressure':'bp',
-            'internalmeasurements':'intmeas',
-            'crossleadmeasurements':'xleadmeas',
-            'groupmeasurements':'grpmeas',
-            'groupmeasurement':'grpmeas',
-            'groupnumber':'grpno',
-            'codedstatement':'codedstmt',
-            'unparsedstatement':'unparstmt',
-            'statementnumber':'stmtno',
-            'qualitystatement':'qualstmt',
-            'variables':'var',
-            'listof':'lstof',
-            'numericvalue':'numvar',
-            'serialcomparison':'srlcomp',
-            'previousecg':'prevecg',
-            'modifiers':'mod',
-            'modifier':'mod',
-            'globalmeasurements':'globmeas',
-            'ecgmeasurements':'ecgmeas',
-            'ecgsample':'ecgsamp'
-        }
-        else:
-            self.ABBREVIATIONS = {}
+    def __init__(self,abbreviations: dict = {}):
+        self.ABBREVIATIONS = abbreviations
+
+    @staticmethod
+    def sanitize_column_name_for_sql(name: str) -> str:
+        #Sanitise column names 
+        # Lowercase, replace spaces/periods with underscore, remove special characters
+        new_column_name = name.strip().lower()
+        new_column_name = re.sub(r'#', 'no', new_column_name) 
+        new_column_name = re.sub(r"[ .]+", "_", new_column_name)
+        new_column_name = re.sub(r"[^a-z0-9_]", "", new_column_name)
+        if new_column_name[-1] == '_':
+            new_column_name = new_column_name[:-1]
+        if 'right' in new_column_name:
+            new_column_name = 'right_'
+        return new_column_name
 
     def sanitise(self,column_names: list, simple = True) -> dict:
         if simple:
@@ -111,6 +92,8 @@ class ColumnNameSanitizer():
                 new_column_names[col] = new_column_name
         else:
            new_column_names = self.shorten_column_names(column_names)
+        for k,v in new_column_names.items():
+            new_column_names[k] = self.sanitize_column_name_for_sql(v)
         return new_column_names
 
     def tokenize(self, name):
@@ -162,3 +145,13 @@ class ColumnNameSanitizer():
             unique_name = self.ensure_unique(short_name, used_names)
             new_names[col] = unique_name
         return new_names
+
+def infer_dataset_tablename(pathstr: str) -> tuple:
+    fname = pathstr.split('/')[-1] #removes parent directory to get filename only
+    fname_remove_csv = fname.split('.csv')[0]
+    datepart = re.search(r'[0-9]{1,4}-[0-9]{1,2}-[0-9]{1,4}',fname_remove_csv).group() # type: ignore
+    lst = fname_remove_csv.split('.')
+    suffix = '_' + datepart
+    dataset = lst[0]
+    tablename = lst[1].split(suffix)[0]
+    return fname, dataset, tablename

@@ -3,7 +3,7 @@ import argparse
 from sqlalchemy import create_engine, text
 import yaml
 
-def get_engine(config_path="../config/db_credentials.yml"):
+def get_engine(config_path="config/.env"):
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
     db_url = f"postgresql+psycopg2://{cfg['user']}:{cfg['password']}@{cfg['host']}:{cfg['port']}/{cfg['database']}"
