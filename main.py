@@ -25,7 +25,7 @@ class Cardinal:
             print(f"Completed: {description}")
 
     def main(self):
-        base_path = Path(__file__)
+        base_path = Path(__file__).parent
         raw_path = self.raw_path
         preprocessed_path = self.preprocessed_path
         clean_path = self.clean_path
@@ -40,10 +40,10 @@ class Cardinal:
                     ["python", str(base_path / "create_schema.py"), "--dataset", dataset])
 
         self.run_step("Transforming preprocessed CSV files",
-                ["python", str(base_path / "transformation.py"), "--clean_path", clean_path])
+                ["python", str(base_path / "transforms.py"), "--clean_path", clean_path])
 
         self.run_step("Loading cleaned data into staging tables",
-                ["python", str(base_path / "load.py"), "--dataset", "--clean_path", clean_path])
+                ["python", str(base_path / "load.py"), "--clean_path", clean_path])
         for dataset in self.datasets:
             self.run_step("Merging staging data into final tables",
                 ["python", str(base_path / "merge.py"), "--dataset", dataset])
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     parser.add_argument("--config", required=False, help="Path to config file")
     args = parser.parse_args()
     if hasattr(args,'config'):
-        card = Cardinal(args.config_path)
+        card = Cardinal(args.config)
     else:
         card = Cardinal()
     card.main()

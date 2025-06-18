@@ -7,3 +7,4 @@ __pycache__
 archive
 test.ipynb
 generate_schema.py
+config.yml

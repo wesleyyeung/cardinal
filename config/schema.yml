@@ -1,6 +1,7 @@
 ccd.cardiacsurgery:
+- mrn_sha1
+- mrn_sha2
 - Year of Surgery
-- Patient ID
 - Date of Surgery
 - Age at Surgery
 - Case Number
@@ -302,6 +303,7 @@ ccd.ohca:
 - Date of Discharge or Death
 cis.cag:
 - IDRef
+- NEXUSIDRef
 - Procedure Date
 - Procedure2
 - ResCode
@@ -603,6 +605,7 @@ cis.cag:
 - '2001-09-01 00:00:00'
 cis.caglesion:
 - IDRef
+- NEXUSIDRef
 - Study Num
 - Procedure Date
 - Procedure2
@@ -633,6 +636,7 @@ cis.caglesion:
 - VIP
 cis.echo:
 - IDRef
+- NEXUSIDRef
 - Procedure Date
 - Procedure2
 - Proc_HospitalID
@@ -1196,7 +1200,7 @@ cis.nuclear:
 - ResCode
 - Proc_HospitalID
 - VIP
-- StudyNum
+- NEXUSIDRef
 cis.pacemaker:
 - Study Num
 - IDRef
@@ -1807,6 +1811,7 @@ cis.pci:
 - Date_SymptomOnSet
 - Date_SeekMedAtt
 - Date_FirstMedCon
+- NEXUSIDRef
 cis.pcidevicesequence:
 - Study Num
 - IDRef
@@ -2043,6 +2048,7 @@ cis.procedure:
 - Machine
 - Text_CaseClosed
 - Text_Priority
+- NEXUSIDRef
 - HTML
 - HL7_Text
 - Folder_Path
