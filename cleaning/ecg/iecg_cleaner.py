@@ -104,6 +104,7 @@ class ECGiECGCleaner(BaseCleaner):
         df = df.rename(columns=remap_dict)
 
         selected_cols = [
+            'filename',
             'subject_id',
             'subject_dob',
             'subject_age',

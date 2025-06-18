@@ -7,3 +7,4 @@ datasets:
 clean_path: /Users/Wesley/data/nuhs/csv/clean
 raw_path: /Users/Wesley/data/nuhs/csv/raw
 preprocessed_path: /Users/Wesley/data/nuhs/csv/preprocessed
+chunksize: 10000

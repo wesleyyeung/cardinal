@@ -30,12 +30,14 @@ class Preprocess:
         self.filelist = glob.glob(raw_path+"/*.csv") #read all csv files
         self.filelist += glob.glob(raw_path+"/*.xlsx") #read all xlsx files
         self.filelist += glob.glob(raw_path+"/*.parquet") #read all parquet files
-        self.preprocessed_files = []
-        self.chunksize = 500000
+        with open('config/config.yml','r') as file:
+            self.conf = yaml.safe_load(file)
+        self.chunksize = self.conf.get('chunksize',100000)
         with open('config/schema.yml','r') as file:
             self.known_schemas = yaml.safe_load(file)
         with open('config/phi_columns.yml','r') as file:
             self.phi_columns = yaml.safe_load(file)
+        self.preprocessed_files = []
         try:
             with open('logs/preprocess.csv','r') as csvfile:
                 reader = csv.reader(csvfile, delimiter=' ', quotechar='|')

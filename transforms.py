@@ -27,7 +27,8 @@ class Transforms:
                 continue
             df = pd.read_csv(file)
             df, suffix = self.transformation(df)
-            save_path = self.clean_path + '/' + fname.split('.csv')[0] + '_' + suffix + '.csv'
+            _, datepart = fname.split('.csv')[0].split('_')
+            save_path = self.clean_path + '/' + dataset + '/' + dataset + '.' + tablename + '_' + suffix + '_' + datepart + '.csv'
             df.to_csv(save_path,index=False)
 
 if __name__ == "__main__":
