@@ -3,6 +3,7 @@ import hashlib
 import re
 import yaml
 from sqlalchemy import create_engine
+import pandas as pd
 
 def get_engine(config_path="config/.env"):
         with open(config_path, "r") as file:
@@ -155,3 +156,18 @@ def infer_dataset_tablename(pathstr: str) -> tuple:
     dataset = lst[0]
     tablename = lst[1].split(suffix)[0]
     return fname, dataset, tablename
+
+def has_any_code(code_str, target_set):
+    code_list = code_str.split(',')
+    if code_list: #check if list is not empty
+        codes = set(code_list)
+        return 1 if not codes.isdisjoint(target_set) else 0
+    else:
+        return 0
+    
+def hash_csv_content(path):
+    df = pd.read_csv(path, dtype=str).fillna("")  # Read all as strings
+    df = df.reindex(sorted(df.columns), axis=1)   # Sort columns alphabetically
+    df = df.sort_values(by=df.columns.tolist()).reset_index(drop=True)  # Sort rows
+    normalized = df.to_csv(index=False, line_terminator='\n').encode("utf-8")
+    return hashlib.md5(normalized).hexdigest()

@@ -2910,12 +2910,17 @@ ehr.edw_outpatient_medication:
 - ORDER_STATUS_DESC
 - ORDER_TYPE_DCD
 ehr.encounter:
+- visit_id
 - mrn_sha1
-- time_stamp
-- location
 - encounter_type
+- visit_date
+- visit_end_date
+- location
+- sub_location
 - primary_diagnosis
 - secondary_diagnosis
+- visit_outcome
+- db_source
 ehr.patient:
 - mrn_sha1
 - dob
@@ -2950,3 +2955,7 @@ ehr.patient:
 - radiotherapy_onset
 - chest_ca
 - chest_ca_onset
+- thyroid_disease
+- thyroid_disease_onset
+- copd
+- copd_onset

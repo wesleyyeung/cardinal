@@ -1,5 +1,5 @@
 import argparse
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import inspect, text
 import yaml
 from pathlib import Path
 import sys
@@ -62,13 +62,12 @@ class Merge:
         type_map = {col: resolve_type(col) for col in column_order}
         return column_order, type_map, table_cols
 
-    def merge_staging_tables(self):
+    def setup(self):
         staging_schema = f"staging_{self.dataset}"
         final_schema = self.dataset
 
         engine = get_engine()
         inspector = inspect(engine)
-
         table_names = inspector.get_table_names(schema=staging_schema)
 
         # Group tables by base name
@@ -80,9 +79,15 @@ class Merge:
             base = base.split('.')[-1]
             grouped[base].append(t)
 
+        return grouped, staging_schema, final_schema, engine
+
+    def merge_staging_tables(self,tablename=None):
+        grouped, staging_schema, final_schema, engine = self.setup()
         with engine.begin() as conn:
             for base_name, tables in grouped.items():
-                print(f"Merging tables for base name '{base_name}': {tables}")
+                if (tablename is not None) and (tablename != base_name):
+                    continue                    
+                print(f"Merging {len(tables)} tables for base name '{base_name}' from '{staging_schema}' into '{self.dataset}'")
                 column_order, type_map, table_cols = self.get_column_types(engine, staging_schema, tables)
                 if not column_order:
                     print(f"Skipping {base_name}: no common columns")
@@ -100,31 +105,95 @@ class Merge:
                     selects.append(f'SELECT {select_clause} FROM "{staging_schema}"."{table}"')
 
                 union_query = " UNION ALL ".join(selects)
-                dedup_query = f"SELECT DISTINCT * FROM ({union_query}) AS merged" 
-                #Consider refactoring to work on id and datetime column subsets
-                ###SELECT * FROM (
-                ###    SELECT *, ROW_NUMBER() OVER (PARTITION BY patient_id, visit_date ORDER BY updated_at DESC NULLS LAST) AS rn
-                ###    FROM ({union_query}) AS sub
-                ###) AS filtered WHERE rn = 1
+                dedup_query = f"SELECT DISTINCT * FROM ({union_query}) AS merged"
+                
                 final_table = f'"{final_schema}"."{base_name}"'
 
                 print(f"Creating {final_table} with deduplicated rows and harmonized types.")
                 conn.execute(text(f'DROP TABLE IF EXISTS {final_table};'))
-                conn.execute(text(f'CREATE TABLE {final_table} AS {dedup_query};'))
+                try:
+                    conn.execute(text(f'CREATE TABLE {final_table} AS {dedup_query};'))
+                except Exception as e:
+                    with open('logs/errors.txt','a') as file:
+                        file.writelines(str(e))
+                    raise e
 
         print("Merge completed.")
+
+    def batch_merge_staging_tables(self, tablename=None, batch_size: int = 10000):
+        grouped, staging_schema, final_schema, engine = self.setup()
+        with engine.begin() as conn:
+            for base_name, tables in grouped.items():
+                if (tablename is not None) and (tablename != base_name):
+                    continue
+                print(f"Batch merging {len(tables)} tables for base name '{base_name}' from '{staging_schema}' into '{self.dataset}'")
+
+                column_order, type_map, table_cols = self.get_column_types(engine, staging_schema, tables)
+                if not column_order:
+                    print(f"Skipping {base_name}: no common columns")
+                    continue
+
+                final_table = f'"{final_schema}"."{base_name}"'
+                columns_ddl = ', '.join(f'"{col}" {type_map[col]}' for col in column_order)
+
+                print(f"Creating {final_table} schema.")
+                conn.execute(text(f'DROP TABLE IF EXISTS {final_table};'))
+                conn.execute(text(f'CREATE TABLE {final_table} ({columns_ddl});'))
+
+                for table in tables:
+                    print(f"Batch inserting from {table} into {final_table}")
+                    offset = 0
+                    while True:
+                        select_clause = ', '.join(
+                            f'CAST("{col}" AS {type_map[col]}) AS "{col}"'
+                            if col in table_cols[table]
+                            else f'NULL::{"TEXT" if col not in type_map else type_map[col]} AS "{col}"'
+                            for col in column_order
+                        )
+                        batch_query = text(f"""
+                            INSERT INTO {final_table}
+                            SELECT {select_clause}
+                            FROM "{staging_schema}"."{table}"
+                            OFFSET :offset LIMIT :limit
+                        """)
+                        result = conn.execute(batch_query, {"offset": offset, "limit": batch_size})
+                        if result.rowcount == 0:
+                            break
+                        offset += batch_size
+
+                print(f"Deduplicating {final_table}")
+                final_table_replaced = final_table.replace('"','')
+                dedup_temp = f'"{final_table_replaced}_dedup"'
+                conn.execute(text(f"""
+                    CREATE TABLE {dedup_temp} AS
+                    SELECT DISTINCT * FROM {final_table};
+                """))
+                conn.execute(text(f'DROP TABLE {final_table};'))
+                conn.execute(text(f'ALTER TABLE {dedup_temp} RENAME TO "{base_name}";'))
+                conn.execute(text(f'ALTER TABLE {base_name} SET SCHEMA {final_schema}'))
+
+        print("Batch merge completed.")
+
+    def merge(self,tablename=None, batch_size: int = 10000):
+        if batch_size:
+            self.batch_merge_staging_tables(tablename=tablename,batch_size=batch_size)
+        else:
+            self.merge_staging_tables(tablename=tablename)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     with open('config/config.yml','r') as file:
         conf = yaml.safe_load(file)
     parser.add_argument("--dataset", default = None, required=False, help="Dataset name (e.g., ccd or cis)")
+    parser.add_argument("--tablename", default = None, required=False, help="Table name")
+    parser.add_argument("--batchsize", default = 0, required=False, help="Batch size used for batch processing")
     args = parser.parse_args()
+    args.batchsize = int(args.batchsize)
     if args.dataset is None:
         print('Merging all datasets:')
         for dataset in conf['datasets']:
             m = Merge(dataset)
-            m.merge_staging_tables()
+            m.merge(tablename=args.tablename,batch_size=args.batchsize)
     else:
         m = Merge(args.dataset)
-        m.merge_staging_tables()
+        m.merge(tablename=args.tablename,batch_size=args.batchsize)

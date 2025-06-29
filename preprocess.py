@@ -10,7 +10,7 @@ import pandas as pd
 import pyarrow.parquet as pq
 import numpy as np
 from tableinferer import TableNameInferer
-from utils import redact_nric
+from utils import redact_nric, hash_csv_content
 import openpyxl
     
 class Preprocess:
@@ -138,6 +138,7 @@ class Preprocess:
     def preprocess(self):
         #1. Read raw file directory and obtain file list
         for file in self.filelist:
+            #file_hash = hash_csv_content(file)
             if file in self.preprocessed_files:
                 print(f'{file} exists in logs, skipping..')
                 continue
