@@ -24,9 +24,15 @@ class EHREncounterDxGroups(BaseTransform):
                 combined_codes[db][dx] = codes.get(dx)
             dx_keys += list(codes.keys())
         
+        
         df.loc[df['db_source']=='edw','combined_diagnosis'] = df.loc[df['db_source']=='edw','primary_diagnosis'].astype(str).str.replace('.0','') + ',' + df.loc[df['db_source']=='edw','secondary_diagnosis'].astype(str).str.replace('.0','')
         df.loc[df['db_source']=='dts','combined_diagnosis'] = df.loc[df['db_source']=='dts','primary_diagnosis'].astype(str) + ',' + df.loc[df['db_source']=='dts','secondary_diagnosis'].astype(str)
         df.loc[:,'combined_diagnosis'] = df['combined_diagnosis'].astype(str).str.replace(',nan','').str.replace('nan,','').str.replace('nan','')
+
+        if any(df['combined_diagnosis'].str.contains(r'\.')):
+            print(df['combined_diagnosis'][df['combined_diagnosis'].str.contains(r'\.')].tolist())
+            raise
+
 
         dx_keys = list(set(dx_keys))
         df[dx_keys] = 0
@@ -41,5 +47,5 @@ class EHREncounterDxGroups(BaseTransform):
                 df.loc[df['db_source']==db,dx] = output
    
         df['death'] = df['visit_outcome'].isin(['Death Coroners','Death Non-Coroners','Deceased']).astype(int)
-        cols = ['visit_id','mrn_sha1','visit_date','location','sub_location','combined_diagnosis'] + list(combined_codes[db].keys()) + ['death']
+        cols = ['visit_id','mrn_sha1','visit_date','location','sub_location','combined_diagnosis'] + dx_keys + ['death']
         return df[cols], "dxgroups"

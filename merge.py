@@ -192,8 +192,13 @@ if __name__ == "__main__":
     if args.dataset is None:
         print('Merging all datasets:')
         for dataset in conf['datasets']:
-            m = Merge(dataset)
-            m.merge(tablename=args.tablename,batch_size=args.batchsize)
+            try:
+                m = Merge(dataset)
+                m.merge(tablename=args.tablename,batch_size=args.batchsize)
+            except:
+                print('Failed! Attempting batch merge with default batchsize of 10000')
+                m = Merge(dataset)
+                m.merge(tablename=args.tablename,batch_size=10000)
     else:
         m = Merge(args.dataset)
         m.merge(tablename=args.tablename,batch_size=args.batchsize)

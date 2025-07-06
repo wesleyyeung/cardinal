@@ -47,7 +47,7 @@ class Clean:
             fname, self.dataset, self.tablename = infer_dataset_tablename(csv_path)
             print(f"Cleaning file: {fname} (dataset: {self.dataset}, table: {self.tablename})")
             if fname in clean_files:
-                print(f"Cleaned file {csv_path} found, skipping.")
+                print(f"Cleaned file for {csv_path} found, skipping.")
                 continue
             else:
                 #Read data
