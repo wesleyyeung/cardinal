@@ -5,7 +5,8 @@ from collections import defaultdict
 import pandas as pd
 from sqlalchemy import inspect, text
 from utils import get_engine
-import yaml
+import sqlite3
+import json
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -13,27 +14,36 @@ if __name__ == "__main__":
     parser.add_argument("--namepart", required=True, help="namepart to remove or drop")
     args = parser.parse_args()
 
-    if args.where in ['preprocessing','load']:
-        path = f'logs/{args.where}.csv'
-        df = pd.read_csv(path,names=['filename','table','datetime'])
-        df = df[df['filename'].apply(lambda row: args.namepart not in row)]
-        df.to_csv(path,index=False)
-    elif args.where == 'clean':
-        with open('config/config.yml','r') as file:
-            conf = yaml.safe_load(file)
-        clean_files = glob.glob(conf['clean_path']+'/**/*')
-        remove_files = [file for file in clean_files if args.namepart in file]
-        print(f'Removing {len(remove_files)} files in {conf["clean_path"]} matching "{args.namepart}"')
-        for file in remove_files:
-            try:
-                os.remove(file)
-            except Exception as e:
-                print(f'Failed to remove {file} due to {e}')
+    if args.where in ['preprocess','load','clean']:
+        db_location = f'data/{args.where}.db'
+        con = sqlite3.connect(db_location)
+        
+        try:
+            tablename = pd.read_sql_query(f"SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%{args.namepart}%'",con=con)
+            tablename = tablename.iloc[0,0]
+        except:
+            tablename = args.namepart
+            print(f'Failed to find table containing {args.namepart} in {db_location}')
+        
+        try:
+            cur = con.cursor()
+            print(f"Dropped {tablename} from {db_location}")
+            cur.execute(f"DROP TABLE '{tablename}'")
+            con.commit()
+        except Exception as e:
+            print(f'Failed to drop table {tablename} from {db_location} due to {e}')
+        try:
+            cur = con.cursor()
+            print(f'Removing {args.namepart} from {args.where}_log')
+            cur.execute(f"DELETE FROM {args.where}_log WHERE tablename LIKE '%{args.namepart}%'")
+            con.commit()
+        except Exception as e:
+            print(f'Failed to remove record from {args.where}_log due to {e}')
+        
     else:
         engine = get_engine()
         inspector = inspect(engine)
-        table_names = inspector.get_table_names(schema=args.type)
-
+        table_names = inspector.get_table_names(schema=args.where)
         with engine.begin() as conn:
             for table in table_names():
                 if args.namepart in table:

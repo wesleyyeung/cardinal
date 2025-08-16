@@ -1,17 +1,16 @@
 import pandas as pd
 from fuzzywuzzy import fuzz
 
-class PatternMatcher:
+class FuzzySearch:
 
-    def __init__(self,keywords: list, target_series: pd.Series, fuzzy: bool = True, threshold: int = 95):
-        self.keywords = [str(keyword).lower() for keyword in keywords]
-        self.series = target_series
-        self.target_list = target_series.tolist()
+    def __init__(self, keywords: list, target_series: pd.Series, fuzzy: bool = True, threshold: int = 95):
+        self.keywords = keywords
+        self.target_series = target_series
         self.fuzzy = fuzzy
         self.output_list = []
         self.threshold = threshold
 
-    def recursive_fuzzy_search(self, patterns: list, candidates: list, threshold: int, pruning_threshold: float = 0.5, matched: list = [], iteration_count: int = 0,verbose: int = 1) -> list:
+    def recursive_fuzzy_search(self, patterns: list, candidates: list, threshold: int, pruning_threshold: float = 0.7, matched: list = [], iteration_count: int = 0,verbose: int = 1) -> list:
         if not patterns: #when there are no more patterns to match, return sorted matched list
             return sorted(matched)
         else:
@@ -37,9 +36,12 @@ class PatternMatcher:
             patterns = list(set(new_matches)) #use new_matches as the seed for the next iteration
         return self.recursive_fuzzy_search(patterns,candidates,threshold,pruning_threshold,matched,iteration_count,verbose)
     
-    def match(self,verbose: bool = False) -> list:
+    def search(self, **kwargs) -> list:
+        self.keywords = [str(keyword).lower() for keyword in self.keywords]
+        self.series = self.target_series
+        self.target_list = self.target_series.tolist()
         if self.fuzzy:
-            return self.recursive_fuzzy_search(patterns=self.keywords,candidates=self.target_list,threshold =self.threshold)
+            return self.recursive_fuzzy_search(patterns=self.keywords,candidates=self.target_list,threshold =self.threshold,**kwargs)
         else:
             for keyword in self.keywords: 
                 self.output_list += self.series[self.series.str.lower().str.contains(keyword)].tolist()

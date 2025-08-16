@@ -1,65 +1,80 @@
-import csv
 import argparse
+import json
 import pandas as pd
-import yaml
-from pathlib import Path
-from utils import get_engine, infer_dataset_tablename
+from utils import get_engine, infer_dataset_tablename, query
+import sqlite3
 
-class LoadStagingTable:
+class Load:
     
-    def __init__(self, clean_path: str):
-        self.clean_path = clean_path
-        self.preprocessed_files = []
-        try:
-            with open('logs/load.csv','r') as csvfile:
-                reader = csv.reader(csvfile, delimiter=' ', quotechar='|')
-                for row in reader:
-                    self.preprocessed_files += [row[0]]
-        except:
-            pass
+    def __init__(self,specify_schema,specify_tablename):
+        self.con = sqlite3.connect("data/load.db")
+        self.clean_con = sqlite3.connect("data/clean.db")
+        self.engine = get_engine()
+        self.specify_schema = specify_schema
+        self.specify_tablename = specify_tablename
+        cur = self.con.cursor()
+        cur.execute("CREATE TABLE IF NOT EXISTS load_log(dataset, tablename, datetime)")
+        self.con.commit()
+        self.loaded_tables = pd.read_sql_query("SELECT tablename FROM load_log",self.con)['tablename'].tolist()    
+        with open('config/config.json','r') as file:
+            self.chunksize = json.load(file)['chunksize']
 
-    def load_cleaned_data(self):
-        CLEAN_DIR = Path(self.clean_path)
-
-        engine = get_engine()
-
-        clean_files = CLEAN_DIR.glob("**/*.csv")
-        clean_files = [str(file) for file in clean_files]
-        print(f"Found the following cleaned files: {clean_files}")
-
-        for fname in clean_files:
-            if fname in self.preprocessed_files:
-                print(f'{fname} exists in logs, skipping..')
+    def load(self):
+        clean_tables = pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table' AND name != 'clean_log'",self.clean_con)['name'].tolist()    
+        print(f"Found the following cleaned files: {clean_tables}")
+        for table in clean_tables:
+            dataset, tablename = infer_dataset_tablename(table)
+            if self.specify_schema is not None and dataset != self.specify_schema:
                 continue
-            if not fname.endswith('.csv'):
+            elif
+                self.specify_tablename is not None and tablename != self.specify_tablename:
+                continue 
+            SCHEMA = f"staging_{dataset}"
+            if table == self.specify_tablename:
+                pass
+            elif tablename in self.loaded_tables:
+                print(f'{tablename} exists in logs, skipping..')
                 continue
-            _, self.dataset, self.tablename = infer_dataset_tablename(fname)
-            SCHEMA = f"staging_{self.dataset}"
-            table_name = fname.split('/')[-1]
-            clean_path = CLEAN_DIR / fname
-
-            print(f"Loading {fname} → {SCHEMA}.{table_name}")
-            df = pd.read_csv(clean_path)
-    
-            df.to_sql(
-                name=table_name,
-                con=engine,
-                schema=SCHEMA,
-                if_exists='replace',
-                index=False
-            )
-            with open('logs/load.csv','a') as csvfile:
-                    csvwriter = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-                    csvwriter.writerow([fname , self.tablename, str(pd.Timestamp.now())])
+            try:
+                print(f"Loading {table} → {SCHEMA}.{tablename}")
+                print("Counting number of rows")
+                nrows = pd.read_sql_query(f"SELECT COUNT(*) AS nrow FROM '{table}'",self.clean_con)['nrow'].iloc[0]
+                print("Reading table from clean.db")
+                reader = pd.read_sql_query(f"SELECT * FROM '{table}'",self.clean_con,chunksize=self.chunksize)
+                #Load by chunk
+                for i, chunk in enumerate(reader):
+                    print(f"Loading {i*self.chunksize}/{nrows}")
+                    chunk.to_sql(
+                        name=tablename,
+                        con=self.engine,
+                        schema=SCHEMA,
+                        if_exists='append',
+                        index=False
+                    )
+                #Log to database                
+                values = f"('{dataset}', '{tablename}', '{str(pd.Timestamp.now())}')"
+                cur = self.con.cursor()
+                cur.execute(f"INSERT INTO load_log VALUES {values}")
+                self.con.commit()
+            except Exception as e:
+                print(f"Failed to load due to {e}, skipping...")
+                #Rollback changes
+                try:
+                    query_string = f"DROP TABLE '{dataset}.{tablename}'"
+                    query(query_string,return_df=False)
+                except Exception as e:
+                    print(f'Failed to drop existing table due to {e}')
 
         print("All tables loaded.")
 
+    def exit(self):
+        self.con.close()
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    with open('config/config.yml','r') as file:
-        conf = yaml.safe_load(file)
-    parser.add_argument("--clean_path", default=conf['clean_path'], required=False, help="Path to directory containing clean files")
+    parser.add_argument("--schema",default=None,required=False,help='Specify schema to load')
+    parser.add_argument("--tablename",default=None,required=False, help="Tablename to load in the format schema.tablename")
     args = parser.parse_args()
-
-    lst = LoadStagingTable(args.clean_path)
-    lst.load_cleaned_data()
+    l = Load(args.schema,args.tablename)
+    l.load()
+    l.exit()

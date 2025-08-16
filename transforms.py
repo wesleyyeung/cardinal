@@ -1,42 +1,40 @@
 import argparse
 from pathlib import Path
-import yaml
+import json
 import pandas as pd
 from transform import TRANSFORM_REGISTRY
 from utils import infer_dataset_tablename
+import sqlite3
 
 class Transforms:
 
-    def __init__(self, clean_path: str):
-        self.clean_path = clean_path
+    def __init__(self):
+        self.con = sqlite3.connect("data/clean.db")
 
     def get_transform(self,dataset: str, tablename: str):
         transformation = TRANSFORM_REGISTRY.get(dataset,{}).get(tablename,None)
         self.transformation = transformation.transform # type: ignore
 
     def transform(self):
-        CLEAN_DIR = Path(self.clean_path)
-        clean_files = CLEAN_DIR.glob("**/*.csv")
-        clean_files = [str(file) for file in clean_files]
-        for file in clean_files:
-            fname, dataset, tablename = infer_dataset_tablename(file)
+        clean_tables = pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table' AND name != 'clean_log'",self.con)["name"].tolist()
+        for table in clean_tables:
+            dataset, tablename = infer_dataset_tablename(table)
             try:
                 self.get_transform(dataset=dataset,tablename=tablename)
-                print(f"Transforming {fname} (dataset: {dataset}, table: {tablename})")
+                print(f"Transforming dataset: {dataset}, table: {tablename}")
             except:
                 continue
-            df = pd.read_csv(file)
-            df, suffix = self.transformation(df)
-            _, datepart = fname.split('.csv')[0].split('_')
-            save_path = self.clean_path + '/' + dataset + '/' + dataset + '.' + tablename + '_' + suffix + '_' + datepart + '.csv'
-            df.to_csv(save_path,index=False)
+            df = pd.read_sql_query(f"SELECT * FROM '{table}'",self.con)
+            schema, df, suffix = self.transformation(df)
+            df.to_sql(f"{schema}_{tablename}_{suffix}",if_exists="append",index=False)
+
+    def exit(self):
+        self.con.close()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    with open('config/config.yml','r') as file:
-        conf = yaml.safe_load(file)
-    parser.add_argument("--clean_path", default=conf['clean_path'], required=False, help="Path to directory containing clean files")
-    args = parser.parse_args()
-
-    t = Transforms(args.clean_path)
+    with open('config/config.json','r') as file:
+        conf = json.load(file)
+    t = Transforms()
     t.transform()
+    t.exit()

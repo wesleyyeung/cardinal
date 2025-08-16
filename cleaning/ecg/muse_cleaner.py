@@ -4,9 +4,9 @@ from cleaning.base_cleaner import BaseCleaner
 class ECGMuseCleaner(BaseCleaner):
     def __init__(self):
         super().__init__()
-        self.dt_cols = ['RestingECG/TestDemographics/AcquisitionDate']
+        self.dt_cols = ['ecg_time']
 
-    def clean(self, df: pd.DataFrame) -> pd.DataFrame:
+    def custom_clean(self, df: pd.DataFrame) -> pd.DataFrame:
         remap_dict = {
             'RestingECG/PatientDemographics/PatientID':'subject_id',
             #'subject_dob', #derived

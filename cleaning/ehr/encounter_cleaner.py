@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 from cleaning.base_cleaner import BaseCleaner
 
 class EHREncounterCleaner(BaseCleaner):
@@ -32,4 +31,6 @@ class EHREncounterCleaner(BaseCleaner):
             if df['primary_diagnosis'][df['primary_diagnosis'].str.contains(r'\.').fillna(False)].tolist():
                 print(df['primary_diagnosis'][df['primary_diagnosis'].str.contains(r'\.').fillna(False)].tolist())
                 raise
-        return df
+        return df.rename(columns={
+            'mrn_sha1':'subject_id'
+        })

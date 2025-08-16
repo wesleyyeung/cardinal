@@ -1,6 +1,6 @@
 import pandas as pd
 pd.options.mode.chained_assignment = None
-import yaml
+import json
 from transform.base_transform import BaseTransform
 from utils import has_any_code
 import warnings
@@ -16,9 +16,11 @@ class EHREncounterDxGroups(BaseTransform):
         dx_keys = []
         combined_codes = {}
 
+        with open(f'transform/ehr/code_categories.json','r') as file:
+            code_categories = json.load(file)
+
         for db in db_keys:
-            with open(f'transform/ehr/{db}.yml','r') as file:
-                codes = yaml.safe_load(file)
+            codes = code_categories['diagnosis_codes'][db]['codes'] #get numeric codes per database
             combined_codes[db] = {}
             for dx in codes.keys():
                 combined_codes[db][dx] = codes.get(dx)
@@ -32,7 +34,6 @@ class EHREncounterDxGroups(BaseTransform):
         if any(df['combined_diagnosis'].str.contains(r'\.')):
             print(df['combined_diagnosis'][df['combined_diagnosis'].str.contains(r'\.')].tolist())
             raise
-
 
         dx_keys = list(set(dx_keys))
         df[dx_keys] = 0
@@ -48,4 +49,4 @@ class EHREncounterDxGroups(BaseTransform):
    
         df['death'] = df['visit_outcome'].isin(['Death Coroners','Death Non-Coroners','Deceased']).astype(int)
         cols = ['visit_id','mrn_sha1','visit_date','location','sub_location','combined_diagnosis'] + dx_keys + ['death']
-        return df[cols], "dxgroups"
+        return "derived", df[cols], "dxgroups"

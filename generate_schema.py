@@ -1,6 +1,6 @@
 import glob
 import os
-import yaml
+import json
 import pandas as pd
 
 files = glob.glob("../raw/*.csv")
@@ -20,8 +20,8 @@ for table,file in zip(tables,files):
     elif ext == '.parquet':
         df_dict[table] = pd.read_parquet(file)
 
-with open('config/canonical_tablenames.yml') as file:
-    canonical_tablenames = yaml.safe_load(file)
+with open('config/canonical_tablenames.json') as file:
+    canonical_tablenames = json.load(file)
 
 check = [file for file in list(set(list(df_dict.keys()))) if file not in list(set(list(canonical_tablenames.keys())))]
 if check:
@@ -35,5 +35,5 @@ for k,v in canonical_tablenames.items():
     except:
         schema[v] = df_dict[k].columns.tolist()
 
-with open('config/schema.yml','w') as file:
-    yaml.dump(schema,file)
+with open('config/schema.json','w') as file:
+    json.dump(schema,file)

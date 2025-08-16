@@ -1,5 +1,5 @@
 from pandas import DataFrame
-import yaml
+import json
 from transform.base_transform import BaseTransform
 from utils import build_reverse_mapper, remap_value_fast
 
@@ -9,8 +9,8 @@ class CISCagLesionPivot(BaseTransform):
         super().__init__()
 
     def custom_transform(self, df: DataFrame) -> tuple:
-        with open('transform/cis/caglesion.yml','r') as file:
-            caglesion_dict = yaml.safe_load(file)
+        with open('transform/cis/caglesion.json','r') as file:
+            caglesion_dict = json.load(file)
         df = df[['idref','procedure_date','study_num','lesion','stenosis']]
         reverse_mapper = build_reverse_mapper(caglesion_dict)
         df['lesion'] = df['lesion'].apply(lambda row: remap_value_fast(row,reverse_mapper))
@@ -23,5 +23,5 @@ class CISCagLesionPivot(BaseTransform):
         df = df_exploded[['idref','procedure_date','study_num']].merge(pivot_df,left_index=True,right_index=True)
         df = df.groupby('study_num').max().reset_index()
         df = df[['idref','procedure_date','study_num']+list(caglesion_dict.keys())].fillna(0)
-        return df, "pivoted"
+        return "derived", df, "pivoted"
         

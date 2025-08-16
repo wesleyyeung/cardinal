@@ -1,6 +1,6 @@
 import argparse
 from sqlalchemy import inspect, text
-import yaml
+import json
 from pathlib import Path
 import sys
 import re
@@ -73,10 +73,7 @@ class Merge:
         # Group tables by base name
         grouped = defaultdict(list)
         for t in table_names:
-            regex = r'[0-9]{1,4}-[0-9]{1,2}-[0-9]{1,4}'
-            base = re.split(regex,t)[0]
-            base = base[:-1]
-            base = base.split('.')[-1]
+            base = t.split('.')[-1]
             grouped[base].append(t)
 
         return grouped, staging_schema, final_schema, engine
@@ -136,11 +133,13 @@ class Merge:
                 final_table = f'"{final_schema}"."{base_name}"'
                 columns_ddl = ', '.join(f'"{col}" {type_map[col]}' for col in column_order)
 
-                print(f"Creating {final_table} schema.")
+                print(f"Creating {final_table}.")
                 conn.execute(text(f'DROP TABLE IF EXISTS {final_table};'))
                 conn.execute(text(f'CREATE TABLE {final_table} ({columns_ddl});'))
 
                 for table in tables:
+                    result = conn.execute(text(f'SELECT COUNT(*) FROM "{staging_schema}"."{table}"'))
+                    print(f"{table}: {result.scalar()} rows")
                     print(f"Batch inserting from {table} into {final_table}")
                     offset = 0
                     while True:
@@ -154,12 +153,16 @@ class Merge:
                             INSERT INTO {final_table}
                             SELECT {select_clause}
                             FROM "{staging_schema}"."{table}"
+                            ORDER BY ctid
                             OFFSET :offset LIMIT :limit
                         """)
                         result = conn.execute(batch_query, {"offset": offset, "limit": batch_size})
                         if result.rowcount == 0:
                             break
                         offset += batch_size
+                
+                result = conn.execute(text(f'SELECT COUNT(*) FROM {final_table}'))
+                print(f"{final_table}: {result.scalar()} rows after insert")
 
                 print(f"Deduplicating {final_table}")
                 final_table_replaced = final_table.replace('"','')
@@ -182,11 +185,11 @@ class Merge:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    with open('config/config.yml','r') as file:
-        conf = yaml.safe_load(file)
+    with open('config/config.json','r') as file:
+        conf = json.load(file)
     parser.add_argument("--dataset", default = None, required=False, help="Dataset name (e.g., ccd or cis)")
     parser.add_argument("--tablename", default = None, required=False, help="Table name")
-    parser.add_argument("--batchsize", default = 0, required=False, help="Batch size used for batch processing")
+    parser.add_argument("--batchsize", default = conf['chunksize'], required=False, help="Batch size used for batch processing")
     args = parser.parse_args()
     args.batchsize = int(args.batchsize)
     if args.dataset is None:

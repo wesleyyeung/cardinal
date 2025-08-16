@@ -5,6 +5,7 @@ class CCDCardiacSurgeryCleaner(BaseCleaner):
 
     def __init__(self):
         super().__init__()
+        self.dt_cols =  ['Date of Surgery','Date and Time of Admission','date_and_time_of_operation','date_and_time_of_discharge_or_death']
         self.ABBREVIATIONS = {
             'renal_disease_at_the_time_of_surgery_choicefunctioning_transplant':'renal_disease_functioning_transplant',
             'renal_disease_at_the_time_of_surgery_choicecreatinine_200_umol_per_l':'renal_disease_cr_200_umol_per_l', 
@@ -25,4 +26,6 @@ class CCDCardiacSurgeryCleaner(BaseCleaner):
         }
 
     def custom_clean(self, df: pd.DataFrame) -> pd.DataFrame:
-        return df
+        return df.rename(columns={
+            'mrn_sha1':'subject_id'
+        })

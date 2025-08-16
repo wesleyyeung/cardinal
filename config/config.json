@@ -1,0 +1,1 @@
+{"datasets": ["ccd", "cis", "ecg", "ehr", "scdb"], "clean_path": "/Users/Wesley/data/nuhs/csv/clean", "raw_path": "/Users/Wesley/data/nuhs/csv/raw", "chunksize": 50000}

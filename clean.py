@@ -1,23 +1,30 @@
-import argparse
-import glob
-from pathlib import Path
-import re
 import warnings
 warnings.filterwarnings('ignore', message="^Columns.*")
 warnings.filterwarnings('ignore', message="A value is trying to be set on a copy of a slice from a DataFrame")
-import yaml
+import json
 import pandas as pd
 from cleaning import CLEANER_REGISTRY
 from utils import infer_dataset_tablename
+import sqlite3
 
 class Clean:
 
-    def __init__(self, preprocessed_path: str, clean_path: str):
-        self.preprocessed_path = preprocessed_path
-        self.clean_path = clean_path
-
-        with open('config/schema.yml','r') as file:
-            self.known_schemas = yaml.safe_load(file)
+    def __init__(self):
+        print('Connecting to clean SQLite database')
+        self.con = sqlite3.connect("data/clean.db")
+        print('Reading clean_logs')
+        cur = self.con.cursor()
+        cur.execute("CREATE TABLE IF NOT EXISTS clean_log(dataset, tablename, datetime)")
+        self.con.commit()
+        print('Connecting to preprocess SQLite database')
+        self.preprocess_con = sqlite3.connect("data/preprocess.db")
+        print('Loading config file')
+        with open('config/config.json','r') as file:
+            config = json.load(file)
+        self.chunksize = config['chunksize']
+        print('Loading known schema')
+        with open('config/schema.json','r') as file:
+            self.known_schemas = json.load(file)
             #Check if config/schemas has the same keys as CLEANER_REGISTRY
             CLEANER_REGISTRY_list = []
             for key in CLEANER_REGISTRY.keys():
@@ -26,7 +33,15 @@ class Clean:
             mismatch = [item for item in set(CLEANER_REGISTRY_list) if item not in set(list(self.known_schemas.keys()))]
             if mismatch:
                 raise ValueError(f"Known schema config file does not match cleaner registry: {mismatch}")
-        
+
+        self.cleaned_tables = []
+        try:
+            print('Loading cleaned tables from the log...')
+            self.cleaned_tables = pd.read_sql_query("SELECT tablename FROM clean_log",self.con)['tablename'].tolist()
+            print(f"Found the following cleaned tables: {self.cleaned_tables}")
+        except Exception as e:
+            warnings.warn(f"Unable to load cleaned tables due to {e}")
+
     def get_cleaner(self, dataset: str, tablename: str):
         cleaner = CLEANER_REGISTRY.get(dataset,{}).get(tablename,None)
         if cleaner is None:
@@ -34,51 +49,68 @@ class Clean:
         self.cleaner = cleaner.clean # type: ignore
         
     def clean(self):
-        clean_dir = Path(self.clean_path)
-        try:
-            clean_dir.mkdir(parents=True, exist_ok=False)
-        except:
-            pass
-        #Load file manifest
-        preprocessed_files = glob.glob(self.preprocessed_path+"/*.csv")
-        clean_files = clean_dir.rglob("*csv")
-        clean_files = [file.name for file in clean_files]
-        for csv_path in preprocessed_files:
-            fname, self.dataset, self.tablename = infer_dataset_tablename(csv_path)
-            print(f"Cleaning file: {fname} (dataset: {self.dataset}, table: {self.tablename})")
-            if fname in clean_files:
-                print(f"Cleaned file for {csv_path} found, skipping.")
+        #Load file manifest from preprocess SQLite database
+        preprocessed_tables = pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table' AND name != 'preprocess_log'",self.preprocess_con)['name'].tolist()
+        for table in preprocessed_tables:
+            self.dataset, self.tablename = infer_dataset_tablename(table)
+            original_dataset = self.dataset
+            original_tablename = self.tablename
+            print(f"Cleaning dataset: {self.dataset}, table: {self.tablename}")
+            if self.tablename in self.cleaned_tables:
+                print(f"Cleaned file for {table} found, skipping.")
                 continue
             else:
-                #Read data
-                df = pd.read_csv(csv_path)
-                #Get appropriate cleaner based on table type
-                self.get_cleaner(dataset=self.dataset,tablename=self.tablename)
-                if self.cleaner is None:
-                    print(f"Skipping {csv_path}")
-                    continue 
-                #Clean data
-                df_cleaned = self.cleaner(df)
-                #Save to clean_dir with exact sample filename
-                output_path = clean_dir / self.dataset / fname
-                #Create output diretory if not exists
                 try:
-                    output_dir = clean_dir / self.dataset
-                    directory_path = Path(output_dir)
-                    directory_path.mkdir(parents=True, exist_ok=False)
-                except:
-                    pass
-                #Save output
-                df_cleaned.to_csv(output_path, index=False)
-                print(f"Saved cleaned file to: {output_path}")
+                    #Count rows
+                    query = f"SELECT COUNT(*) AS rows FROM '{table}'"
+                    nrows = pd.read_sql_query(query, self.preprocess_con)['rows'].iloc[0]
+                    #Read data
+                    query = f"SELECT * FROM '{table}'"
+                    # Read in chunks
+                    for n, chunk in enumerate(pd.read_sql_query(query, self.preprocess_con, chunksize=self.chunksize)):
+                        print(f"Processing {n*self.chunksize}/{nrows} rows")
+                        # Get appropriate cleaner based on table type (only once, outside the loop)
+                        if not hasattr(self, 'cleaner_initialized') or not self.cleaner_initialized:
+                            self.get_cleaner(dataset=self.dataset, tablename=self.tablename)
+                            self.cleaner_initialized = True
+                        # Skip if no cleaner
+                        if self.cleaner is None:
+                            print(f"Skipping {table}")
+                            break
+                        # Clean chunk
+                        df_cleaned, destination_schema, destination_tablename = self.cleaner(chunk)
+                        # Allow cleaner module to override schema/tablename
+                        if destination_schema is not None:
+                            self.dataset = destination_schema
+                        if destination_tablename is not None:
+                            self.tablename = destination_tablename
+                        # Append to output table
+                        df_cleaned.to_sql(self.dataset + '.' + self.tablename,con=self.con,if_exists='append',index=False)
+                    #Keep unique values
+                    print('Reading cleaned dataset')
+                    query = f"SELECT * FROM '{self.dataset + '.' + self.tablename}'"
+                    df = pd.read_sql_query(query, self.con)
+                    print('Dropping duplicates')
+                    df = df.drop_duplicates(keep='first')
+                    print('Writing back to clean database')
+                    df.to_sql(self.dataset + '.' + self.tablename,con=self.con,if_exists='replace',index=False)
+                    print(f"{self.dataset+'.'+self.tablename} written to database")
+                    #Log successful processing of file
+                    values = f"('{original_dataset}', '{original_tablename}', '{str(pd.Timestamp.now())}')"
+                    cur = self.con.cursor()
+                    cur.execute(f"INSERT INTO clean_log VALUES {values}")
+                    self.con.commit()
+                    self.cleaner_initialized = False #reset for next table
+                except Exception as e:
+                    warnings.warn(f"Failed to preprocess {self.tablename} due to {e}, skipping...")
+                    raise
+
+    def exit(self):
+        self.con.close()
+        self.preprocess_con.close()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    with open('config/config.yml','r') as file:
-        conf = yaml.safe_load(file)
-    parser.add_argument("--preprocessed_path", default=conf['preprocessed_path'], required=False, help="Path to directory for preprocessed files")
-    parser.add_argument("--clean_path", default=conf['clean_path'], required=False, help="Path to directory containing clean files")
-    args = parser.parse_args()
-
-    c = Clean(args.preprocessed_path,args.clean_path)
+    print('Starting cleaning process...')
+    c = Clean()
     c.clean()
+    c.exit()

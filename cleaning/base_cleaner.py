@@ -5,12 +5,14 @@ from itertools import compress
 
 class BaseCleaner:
     
-    def __init__(self):
+    def __init__(self, destination_schema = None, destination_tablename = None):
         self.ABBREVIATIONS = {}
         self.dt_cols = []
         self.dt_format_dict = {}
+        self.destination_schema = destination_schema
+        self.destination_tablename = destination_tablename
 
-    def clean(self, df: pd.DataFrame) -> pd.DataFrame:
+    def clean(self, df: pd.DataFrame) -> tuple:
         df = df.drop_duplicates(keep='first') 
         df = self.custom_clean(df) #implemented by subclasses
         if not self.dt_format_dict: # if empty
@@ -18,7 +20,7 @@ class BaseCleaner:
         else:
             df = self.standardize_dates_from_dict(df=df,dt_format_dict=self.dt_format_dict)
         df = self.sanitize_dataframe_columns(df=df,abbreviations=self.ABBREVIATIONS)
-        return df
+        return df, self.destination_schema, self.destination_tablename
 
     def standardize_dates(self, df: pd.DataFrame, dt_cols: list = []) -> pd.DataFrame:
         if not dt_cols: # if empty
@@ -51,6 +53,6 @@ class BaseCleaner:
         df = df.iloc[:, sorted(unique_indices)]
         return df
     
-    def custom_clean(self, df: pd.DataFrame) -> pd.DataFrame:
+    def custom_clean(self, df: pd.DataFrame):
         return df
     

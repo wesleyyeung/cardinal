@@ -2,13 +2,13 @@ import subprocess
 import argparse
 import sys
 from pathlib import Path
-import yaml
+import json
 
 class Cardinal:
 
-    def __init__(self, config_path: str = 'config/config.yml'):
+    def __init__(self, config_path: str = 'config/config.json'):
         with open(config_path,'r') as file:
-            config = yaml.safe_load(file)
+            config = json.load(file)
         self.datasets = config['datasets']
         self.raw_path = config['raw_path']
         self.preprocessed_path = config['preprocessed_path']
@@ -51,12 +51,9 @@ class Cardinal:
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required=False, help="Path to config file")
+    parser.add_argument("--config", default='config/config.json', required=False, help="Path to config file")
     args = parser.parse_args()
-    if hasattr(args,'config'):
-        card = Cardinal(args.config)
-    else:
-        card = Cardinal()
+    card = Cardinal(args.config)
     card.main()
 
     

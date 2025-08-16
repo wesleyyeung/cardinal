@@ -1,16 +1,26 @@
 from collections import defaultdict
 import hashlib
 import re
-import yaml
-from sqlalchemy import create_engine
+import json
+from sqlalchemy import create_engine, text
 import pandas as pd
 
 def get_engine(config_path="config/.env"):
         with open(config_path, "r") as file:
-            cfg = yaml.safe_load(file)
+            cfg = json.load(file)
         db_url = f"postgresql+psycopg2://{cfg['user']}:{cfg['password']}@{cfg['host']}:{cfg['port']}/{cfg['database']}"
         return create_engine(db_url)
 
+engine = get_engine()
+
+def query(sql: str = '', engine=engine,return_df=True):
+    if return_df:
+        with engine.connect() as conn:
+            return pd.read_sql(sql, conn)
+    else:
+        with engine.begin() as conn:
+            conn.execute(text(sql))
+    
 # Precompile patterns as a single regex for performance
 NRIC_REGEX = re.compile(r'^[a-zA-Z]{1,2}[0-9]{7}[a-zA-Z]?$')
 
@@ -37,7 +47,7 @@ def safe_load_yml_to_dict(yaml_path: str) -> dict:
         dict: Dictionary loaded from the YAML file.
     """
     with open(yaml_path, 'r') as f:
-        output_dict = yaml.safe_load(f)
+        output_dict = json.load(f)
     return output_dict 
 
 def build_reverse_mapper(mapper: dict) -> dict:
@@ -147,15 +157,11 @@ class ColumnNameSanitizer():
             new_names[col] = unique_name
         return new_names
 
-def infer_dataset_tablename(pathstr: str) -> tuple:
-    fname = pathstr.split('/')[-1] #removes parent directory to get filename only
-    fname_remove_csv = fname.split('.csv')[0]
-    datepart = re.search(r'[0-9]{1,4}-[0-9]{1,2}-[0-9]{1,4}',fname_remove_csv).group() # type: ignore
-    lst = fname_remove_csv.split('.')
-    suffix = '_' + datepart
+def infer_dataset_tablename(input_str: str) -> tuple:
+    lst = input_str.split('.')
     dataset = lst[0]
-    tablename = lst[1].split(suffix)[0]
-    return fname, dataset, tablename
+    tablename = lst[-1]
+    return dataset, tablename
 
 def has_any_code(code_str, target_set):
     code_list = code_str.split(',')
@@ -164,10 +170,100 @@ def has_any_code(code_str, target_set):
         return 1 if not codes.isdisjoint(target_set) else 0
     else:
         return 0
-    
+
+def get_unique(input: str) -> str:
+    return '|'.join(list(set(list(input.split('|')))))    
+
 def hash_csv_content(path):
     df = pd.read_csv(path, dtype=str).fillna("")  # Read all as strings
     df = df.reindex(sorted(df.columns), axis=1)   # Sort columns alphabetically
     df = df.sort_values(by=df.columns.tolist()).reset_index(drop=True)  # Sort rows
     normalized = df.to_csv(index=False, line_terminator='\n').encode("utf-8")
     return hashlib.md5(normalized).hexdigest()
+
+def parse_medication_instruction(instruction: str):
+    instruction = instruction.strip()
+
+    # Normalize parentheses like "(mg)" → "mg"
+    instruction = re.sub(r'\((.*?)\)', r'\1', instruction)
+
+    # Expanded set of verbs
+    verbs = r"(Take|Inject|Infuse|Apply|Insert|Chew|Place|Swallow|Spray|Drink|Put|Give|Administer|Inhale)?"
+
+    # Expanded dose units
+    dose_units = (
+        r"(mg|g|mL|L|litre(s)?|UNIT|units|mcg|µg|IU|drop(s)?|application(s)?|tablet(s)?|capsule(s)?|scoop(s)?|"
+        r"feed(s)?|sachet(s)?|lozenge(s)?|puff(s)?|plaster(s)?|patch(es)?|suppositor(y|ies)?|each|dose|spray(s)?|"
+        r"inhalation(s)?)"
+    )
+
+    # Dose pattern with optional verb
+    dose_pattern = rf"{verbs}\s*([\d,\.]+\s*{dose_units})"
+
+    # Frequency pattern includes:
+    # - numeric patterns (e.g. "3 times a day", "2 feeds a day")
+    # - common phrases (e.g. "at bedtime", "before meals")
+    # - medical abbreviations (OD, BD, TDS, etc.)
+    # - weekday abbreviations (Mon-Sun)
+    frequency_pattern = (
+        r"(every\s+(other\s+)?(hour|morning|night|day|\d+\s*(hours?|days?|weeks?)|"
+        r"Mon|Tue|Wed|Thu|Fri|Sat|Sun)|"
+        r"once\s+(only|a\s+day|daily)?|twice\s+(a\s+day|daily)?|"
+        r"\d+\s+times\s+a\s+(day|week)|"
+        r"\d+\s+feeds\s+a\s+day|"
+        r"at\s+bedtime|"
+        r"when required|as needed|prn|"
+        r"(before\s+(meals?|dialysis|procedure))|"
+        r"on\s+non-dialysis\s+days|"
+        r"\([^)]+\)\s*(OM|ON)|OM|ON|PM|OD|BD|TDS|QDS|QID|"
+        r"(once\s+only\s+on\s+\d{1,2}\s+\w+))"
+    )
+
+    # Duration pattern
+    duration_pattern = (
+        r"(for\s+(up\s+to\s+)?\d+\s+(days?|weeks?)|"
+        r"once\s+for\s+\d+\s+dose)"
+    )
+
+    # Apply patterns
+    dose_match = re.search(dose_pattern, instruction, re.IGNORECASE)
+    freq_match = re.search(frequency_pattern, instruction, re.IGNORECASE)
+    dur_match = re.search(duration_pattern, instruction, re.IGNORECASE)
+
+    # Extract values
+    dose = dose_match.group(2).replace(",", "") if dose_match else None
+    if not dose and "apply to affected area" in instruction.lower():
+        dose = "topical (unspecified)"
+
+    frequency = freq_match.group(0).strip() if freq_match else None
+    duration = dur_match.group(0).replace("for ", "").strip() if dur_match else None
+
+    return {
+        "instruction": instruction,
+        "dose": dose,
+        "frequency": frequency,
+        "duration": duration
+    }
+
+def medication_type_cleaner(input_str):
+    if 'IP' in input_str or 'Inpatient' in input_str:
+        return 'Inpatient'
+    elif 'discharge' in input_str or 'Discharge' in input_str:
+        return 'Discharge'
+    elif 'AE' in input_str or 'Emergency' in input_str:
+        return 'Emergency'
+    elif 'DS' in input_str:
+        return 'Day Surgery'
+    elif 'OP' in input_str or 'Outpatient' in input_str:
+        return 'Outpatient'
+
+def elementwise_nonmissing(df_list):
+    anchor_df = df_list[0] #base source of truth
+    assert len(set([df.shape for df in df_list])) == 1 
+    for df in df_list[1:]:
+        for row_idx in range(len(df)):
+            for col_idx in range(len(list(df))):
+                if pd.isnull(df.iloc[row_idx,col_idx])==False: 
+                    if pd.isnull(anchor_df.iloc[row_idx,col_idx]):
+                        anchor_df.iloc[row_idx,col_idx] =  df.iloc[row_idx,col_idx]
+    return anchor_df

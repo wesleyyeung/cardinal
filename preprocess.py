@@ -1,18 +1,18 @@
 import argparse
-import csv
 import datetime
 import glob
 import os 
 import warnings
 warnings.filterwarnings('ignore', message="^Columns.*")
-import yaml
+import json
 import pandas as pd
 import pyarrow.parquet as pq
 import numpy as np
 from tableinferer import TableNameInferer
-from utils import redact_nric, hash_csv_content
+from utils import redact_nric
 import openpyxl
-    
+import sqlite3
+
 class Preprocess:
     """
     Purpose: 
@@ -23,27 +23,30 @@ class Preprocess:
         5. Create new filename of format: schema.tablename_date.csv  
         6. Save files to preprocesed directory
     """
-    def __init__(self, raw_path: str, preprocessed_path: str):
-        self.threshold = 0.90
+    def __init__(self, raw_path: str, threshold: float = 0.9):
+        self.con = sqlite3.connect("data/preprocess.db")
+        cur = self.con.cursor()
+        cur.execute("CREATE TABLE IF NOT EXISTS preprocess_log(filename, tablename, datetime)")
+        self.con.commit()
+
+        self.threshold = threshold
         self.raw_path = raw_path
-        self.preprocessed_path = preprocessed_path
         self.filelist = glob.glob(raw_path+"/*.csv") #read all csv files
         self.filelist += glob.glob(raw_path+"/*.xlsx") #read all xlsx files
         self.filelist += glob.glob(raw_path+"/*.parquet") #read all parquet files
-        with open('config/config.yml','r') as file:
-            self.conf = yaml.safe_load(file)
+        with open('config/config.json','r') as file:
+            self.conf = json.load(file)
         self.chunksize = self.conf.get('chunksize',100000)
-        with open('config/schema.yml','r') as file:
-            self.known_schemas = yaml.safe_load(file)
-        with open('config/phi_columns.yml','r') as file:
-            self.phi_columns = yaml.safe_load(file)
+        with open('config/schema.json','r') as file:
+            self.known_schemas = json.load(file)
+        with open('config/phi_columns.json','r') as file:
+            self.phi_columns = json.load(file)
         self.preprocessed_files = []
         try:
-            with open('logs/preprocess.csv','r') as csvfile:
-                reader = csv.reader(csvfile, delimiter=' ', quotechar='|')
-                for row in reader:
-                    self.preprocessed_files += [row[0]]
-        except:
+            self.preprocessed_files = pd.read_sql_query("SELECT filename FROM preprocess_log",self.con)['filename'].tolist()
+            print('Logs successfully loaded')
+        except Exception as e:
+            print(f'Unable to load logs due to {e}')
             pass
  
     @staticmethod
@@ -78,7 +81,7 @@ class Preprocess:
             return max_dt.strftime(format='%d-%m-%Y') 
         except BaseException as e:
             warnings.warn(f'Unable to infer date due to {e}')
-            return 'unknowndate' + datetime.datetime.now().strftime(format='%d-%m-%Y') 
+            return datetime.datetime.now().strftime(format='%d-%m-%Y') 
 
     def remove_phi_columns(self,df: pd.DataFrame,tablename: str) -> pd.DataFrame:
         drop_list = self.phi_columns.get(tablename,[])
@@ -128,22 +131,22 @@ class Preprocess:
         for col in df.select_dtypes(include='object'):
             df[col] = df[col].apply(redact_nric)
             obj_cols += [col]
-        #5. Create new filename of format: schema.tablename_date.csv  
-        export_date = self.infer_export_date(df[obj_cols])
-        output_filename = tablename+'_'+export_date+suffix+'.csv'
-        df.to_csv(self.preprocessed_path+'/'+output_filename,index=False)
+        #5. Append empty columns where column is not present in order to match schema
+        missing_cols = [col for col in self.known_schemas[tablename] if col not in list(df)]
+        df[missing_cols] = np.nan
+        #6. Write to database
+        df.to_sql(self.tablename,con=self.con,if_exists='append',index=False)
         del df
         return True
-
+     
     def preprocess(self):
         #1. Read raw file directory and obtain file list
         for file in self.filelist:
-            #file_hash = hash_csv_content(file)
             if file in self.preprocessed_files:
                 print(f'{file} exists in logs, skipping..')
                 continue
-            print(f'Reading "{file}"')
             self.file = file
+            print(f'Reading "{file}"')
             ext = os.path.splitext(file)[1].lower()
             row_count = self.get_row_count(file, ext)
             if row_count > self.chunksize and ext == '.csv':
@@ -170,19 +173,23 @@ class Preprocess:
             
             if flag:
                 #Log successful processing of file
-                with open('logs/preprocess.csv','a') as csvfile:
-                    csvwriter = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-                    csvwriter.writerow([file , self.tablename, str(pd.Timestamp.now())])
+                values = f"('{file}', '{self.tablename}', '{str(pd.Timestamp.now())}')"
+                cur = self.con.cursor()
+                cur.execute(f"INSERT INTO preprocess_log VALUES {values}")
+                self.con.commit()
             else:
-                warnings.warn("Failed to preprocess {file}, skipping...")
+                warnings.warn(f"Failed to preprocess {file}, skipping...")
+    
+    def exit(self):
+        self.con.close()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    with open('config/config.yml','r') as file:
-        conf = yaml.safe_load(file)
+    with open('config/config.json','r') as file:
+        conf = json.load(file)
+    parser.add_argument("--table_inferer_threshold",default=0.9, required=False, help="Decimal [0-1] threshold for the table inferer function")
     parser.add_argument("--raw_path",default=conf['raw_path'], required=False, help="Path to directory containing raw files")
-    parser.add_argument("--preprocessed_path", default=conf['preprocessed_path'], required=False, help="Path to directory for preprocessed files")
     args = parser.parse_args()
-
-    p = Preprocess(args.raw_path,args.preprocessed_path)
+    p = Preprocess(args.raw_path,args.table_inferer_threshold)
     p.preprocess()
+    p.exit()

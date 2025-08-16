@@ -202,7 +202,7 @@ class CISEchoValveLesion(BaseTransform):
         valve_lesions = df['finaldxcollated'].apply(lambda row: evtp.parse(row)).tolist()
         valve_lesions = pd.DataFrame(valve_lesions)
         df = df.merge(valve_lesions,left_index=True,right_index=True)
-        return df, "valvelesion"
+        return "derived", df, "valvelesion"
         
 
 
