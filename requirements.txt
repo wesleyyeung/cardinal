@@ -94,6 +94,7 @@ pydantic==2.11.7
 pydantic_core==2.33.2
 pydeck==0.9.1
 Pygments==2.19.2
+pyodbc==5.2.0
 PyPika==0.48.9
 pyproject_hooks==1.2.0
 python-dateutil==2.9.0.post0
