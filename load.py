@@ -24,17 +24,15 @@ class Load:
         print(f"Found the following cleaned files: {clean_tables}")
         for table in clean_tables:
             dataset, tablename = infer_dataset_tablename(table)
-            if self.specify_schema is not None and dataset != self.specify_schema:
-                continue
-            elif
-                self.specify_tablename is not None and tablename != self.specify_tablename:
-                continue 
-            SCHEMA = f"staging_{dataset}"
-            if table == self.specify_tablename:
+            if dataset == self.specify_schema:
                 pass
-            elif tablename in self.loaded_tables:
-                print(f'{tablename} exists in logs, skipping..')
-                continue
+            elif tablename == self.specify_tablename:
+                pass
+            else:
+                if tablename in self.loaded_tables:
+                    print(f'{tablename} exists in logs, skipping..')
+                    continue
+            SCHEMA = f"staging_{dataset}"
             try:
                 print(f"Loading {table} → {SCHEMA}.{tablename}")
                 print("Counting number of rows")

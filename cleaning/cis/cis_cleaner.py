@@ -25,13 +25,11 @@ class CISCleaner(BaseCleaner):
             'Procedure_Hospital': 'Hospital'
         }, inplace=True)
 
-        #Convert datetime columns
-        df.loc[:,'Procedure Date'] = pd.to_datetime(df['Procedure Date'], format='mixed', errors='coerce')
-        df.loc[:,'Procedure Date'] = df.loc[:,'Procedure Date'].astype(str)
-
         #Rename columns
         header = ['IDRef', 'Study Num']
         if 'Procedure Date' in list(df):
+            #Convert datetime column
+            df.loc[:,'Procedure Date'] = pd.to_datetime(df['Procedure Date'], format='mixed', errors='raise').dt.strftime('%Y-%m-%d %H:%M:%S')
             header = ['IDRef', 'Study Num', 'Procedure Date']
         if 'Hospital' in list(df):
             header = header + ['Hospital']

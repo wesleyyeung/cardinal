@@ -92,6 +92,7 @@ class Clean:
                     df = pd.read_sql_query(query, self.con)
                     print('Dropping duplicates')
                     df = df.drop_duplicates(keep='first')
+                    #Standardize datetime columns
                     print('Writing back to clean database')
                     df.to_sql(self.dataset + '.' + self.tablename,con=self.con,if_exists='replace',index=False)
                     print(f"{self.dataset+'.'+self.tablename} written to database")

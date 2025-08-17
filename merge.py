@@ -187,13 +187,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     with open('config/config.json','r') as file:
         conf = json.load(file)
-    parser.add_argument("--dataset", default = None, required=False, help="Dataset name (e.g., ccd or cis)")
+    parser.add_argument("--schema", default = None, required=False, help="Schema name (e.g., ccd or cis)")
     parser.add_argument("--tablename", default = None, required=False, help="Table name")
     parser.add_argument("--batchsize", default = conf['chunksize'], required=False, help="Batch size used for batch processing")
     args = parser.parse_args()
     args.batchsize = int(args.batchsize)
     if args.dataset is None:
-        print('Merging all datasets:')
+        print('Merging all schema:')
         for dataset in conf['datasets']:
             try:
                 m = Merge(dataset)
@@ -203,5 +203,5 @@ if __name__ == "__main__":
                 m = Merge(dataset)
                 m.merge(tablename=args.tablename,batch_size=10000)
     else:
-        m = Merge(args.dataset)
+        m = Merge(args.schema)
         m.merge(tablename=args.tablename,batch_size=args.batchsize)
