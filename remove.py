@@ -9,13 +9,15 @@ import sqlite3
 import json
 
 if __name__ == "__main__":
+    with open('config/config.json','r') as file:
+        conf = json.load(file)
     parser = argparse.ArgumentParser()
     parser.add_argument("--where", required=True, help="preprocess, clean, load, staging_schema, schema")
     parser.add_argument("--namepart", required=True, help="namepart to remove or drop")
     args = parser.parse_args()
 
     if args.where in ['preprocess','load','clean']:
-        db_location = f'data/{args.where}.db'
+        db_location = f'{conf['data_path']}/{args.where}.db'
         con = sqlite3.connect(db_location)
         
         try:

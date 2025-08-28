@@ -3,7 +3,7 @@ from cleaning.base_cleaner import BaseCleaner
 import numpy as np
 from utils import get_unique, medication_type_cleaner
 
-class EHRDTSMedicationNonFormularyCleaner(BaseCleaner):
+class EHRDTSMedicationCleaner(BaseCleaner):
     
     def __init__(self, destination_schema=None, destination_tablename=None):
         super().__init__(destination_schema=destination_schema,destination_tablename=destination_tablename)
@@ -23,7 +23,7 @@ class EHRDTSMedicationNonFormularyCleaner(BaseCleaner):
             'duration',
             'duration_units'
         ]
-        df['order_types'] = df['order_types'].apply(lambda row: get_unique(row))
+        df['medication_type'] = df['medication_type'].apply(lambda row: get_unique(row))
         rename_dict = {
             'mrn_sha1':'subject_id',
             'first_start_dt':'medication_start_dt',
@@ -38,7 +38,6 @@ class EHRDTSMedicationNonFormularyCleaner(BaseCleaner):
         }
         df['instruction'] = np.nan
         df = df.rename(columns=rename_dict)
-        df['duration_units'] = 'days'
         df = df[final_cols]
 
         df.loc[df['medication_name'].isna(),'medication_name'] = df['instruction'][df['medication_name'].isna()] 

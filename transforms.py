@@ -9,7 +9,9 @@ import sqlite3
 class Transforms:
 
     def __init__(self):
-        self.con = sqlite3.connect("data/clean.db")
+        with open('config/config.json','r') as file:
+            self.conf = json.load(file)
+        self.con = sqlite3.connect(f"{self.conf['data_path']}/clean.db")
 
     def get_transform(self,dataset: str, tablename: str):
         transformation = TRANSFORM_REGISTRY.get(dataset,{}).get(tablename,None)

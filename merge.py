@@ -142,6 +142,7 @@ class Merge:
                     print(f"{table}: {result.scalar()} rows")
                     print(f"Batch inserting from {table} into {final_table}")
                     offset = 0
+                    chunk_no = 0
                     while True:
                         select_clause = ', '.join(
                             f'CAST("{col}" AS {type_map[col]}) AS "{col}"'
@@ -160,6 +161,7 @@ class Merge:
                         if result.rowcount == 0:
                             break
                         offset += batch_size
+                        print(f'{(chunk_no+1)*10000}/{result.scalar()}')
                 
                 result = conn.execute(text(f'SELECT COUNT(*) FROM {final_table}'))
                 print(f"{final_table}: {result.scalar()} rows after insert")
@@ -192,7 +194,7 @@ if __name__ == "__main__":
     parser.add_argument("--batchsize", default = conf['chunksize'], required=False, help="Batch size used for batch processing")
     args = parser.parse_args()
     args.batchsize = int(args.batchsize)
-    if args.dataset is None:
+    if args.schema is None:
         print('Merging all schema:')
         for dataset in conf['datasets']:
             try:

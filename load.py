@@ -7,8 +7,10 @@ import sqlite3
 class Load:
     
     def __init__(self,specify_schema,specify_tablename):
-        self.con = sqlite3.connect("data/load.db")
-        self.clean_con = sqlite3.connect("data/clean.db")
+        with open('config/config.json','r') as file:
+            self.conf = json.load(file)
+        self.con = sqlite3.connect(f"{self.conf['data_path']}/load.db")
+        self.clean_con = sqlite3.connect(f"{self.conf['data_path']}/clean.db")
         self.engine = get_engine()
         self.specify_schema = specify_schema
         self.specify_tablename = specify_tablename

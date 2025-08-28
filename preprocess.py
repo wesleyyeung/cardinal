@@ -24,7 +24,10 @@ class Preprocess:
         6. Save files to preprocesed directory
     """
     def __init__(self, raw_path: str, threshold: float = 0.9):
-        self.con = sqlite3.connect("data/preprocess.db")
+        with open('config/config.json','r') as file:
+            self.conf = json.load(file)
+            
+        self.con = sqlite3.connect(f"{self.conf['data_path']}/preprocess.db")
         cur = self.con.cursor()
         cur.execute("CREATE TABLE IF NOT EXISTS preprocess_log(filename, tablename, datetime)")
         self.con.commit()
@@ -34,8 +37,7 @@ class Preprocess:
         self.filelist = glob.glob(raw_path+"/*.csv") #read all csv files
         self.filelist += glob.glob(raw_path+"/*.xlsx") #read all xlsx files
         self.filelist += glob.glob(raw_path+"/*.parquet") #read all parquet files
-        with open('config/config.json','r') as file:
-            self.conf = json.load(file)
+        
         self.chunksize = self.conf.get('chunksize',100000)
         with open('config/schema.json','r') as file:
             self.known_schemas = json.load(file)

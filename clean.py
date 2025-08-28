@@ -10,14 +10,16 @@ import sqlite3
 class Clean:
 
     def __init__(self):
+        with open('config/config.json','r') as file:
+            self.conf = json.load(file)
         print('Connecting to clean SQLite database')
-        self.con = sqlite3.connect("data/clean.db")
+        self.con = sqlite3.connect(f"{self.conf['data_path']}/clean.db")
         print('Reading clean_logs')
         cur = self.con.cursor()
         cur.execute("CREATE TABLE IF NOT EXISTS clean_log(dataset, tablename, datetime)")
         self.con.commit()
         print('Connecting to preprocess SQLite database')
-        self.preprocess_con = sqlite3.connect("data/preprocess.db")
+        self.preprocess_con = sqlite3.connect(f"{self.conf['data_path']}/preprocess.db")
         print('Loading config file')
         with open('config/config.json','r') as file:
             config = json.load(file)
@@ -86,22 +88,13 @@ class Clean:
                             self.tablename = destination_tablename
                         # Append to output table
                         df_cleaned.to_sql(self.dataset + '.' + self.tablename,con=self.con,if_exists='append',index=False)
-                    #Keep unique values
-                    print('Reading cleaned dataset')
-                    query = f"SELECT * FROM '{self.dataset + '.' + self.tablename}'"
-                    df = pd.read_sql_query(query, self.con)
-                    print('Dropping duplicates')
-                    df = df.drop_duplicates(keep='first')
-                    #Standardize datetime columns
-                    print('Writing back to clean database')
-                    df.to_sql(self.dataset + '.' + self.tablename,con=self.con,if_exists='replace',index=False)
-                    print(f"{self.dataset+'.'+self.tablename} written to database")
                     #Log successful processing of file
                     values = f"('{original_dataset}', '{original_tablename}', '{str(pd.Timestamp.now())}')"
                     cur = self.con.cursor()
                     cur.execute(f"INSERT INTO clean_log VALUES {values}")
                     self.con.commit()
                     self.cleaner_initialized = False #reset for next table
+                    print('Complete!')
                 except Exception as e:
                     warnings.warn(f"Failed to preprocess {self.tablename} due to {e}, skipping...")
                     raise
