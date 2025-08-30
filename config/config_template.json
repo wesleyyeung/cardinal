@@ -1,1 +1,1 @@
-{"datasets": ["ccd", "cis", "ecg", "ehr", "scdb"], "data_path": "..." , "chunksize": 50000}
+{"datasets": ["ccd", "cis", "ecg", "ehr", "scdb"], "data_path": "..." , "raw_path": "...", "chunksize": 50000}

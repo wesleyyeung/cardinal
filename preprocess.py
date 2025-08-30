@@ -9,7 +9,7 @@ import pandas as pd
 import pyarrow.parquet as pq
 import numpy as np
 from tableinferer import TableNameInferer
-from utils import redact_nric
+from utils import redact_nric, xxhash64_for_file
 import openpyxl
 import sqlite3
 
@@ -29,7 +29,7 @@ class Preprocess:
             
         self.con = sqlite3.connect(f"{self.conf['data_path']}/preprocess.db")
         cur = self.con.cursor()
-        cur.execute("CREATE TABLE IF NOT EXISTS preprocess_log(filename, tablename, datetime)")
+        cur.execute("CREATE TABLE IF NOT EXISTS preprocess_log(filename, tablename, checksum, datetime)")
         self.con.commit()
 
         self.threshold = threshold
@@ -45,11 +45,16 @@ class Preprocess:
             self.phi_columns = json.load(file)
         self.preprocessed_files = []
         try:
-            self.preprocessed_files = pd.read_sql_query("SELECT filename FROM preprocess_log",self.con)['filename'].tolist()
+            existing = pd.read_sql_query("SELECT filename, checksum FROM preprocess_log",self.con)
+            self.preprocessed_files = {}
+            for file in existing['filename'].tolist():
+                self.preprocessed_files[file] = existing.loc[existing['filename']==file,'checksum'].iloc[0]
+            print(f'Found the following files in logs:{self.preprocessed_files}')
             print('Logs successfully loaded')
         except Exception as e:
             print(f'Unable to load logs due to {e}')
-            pass
+            print(f'Found: {pd.read_sql_query("SELECT filename, checksum FROM preprocess_log",self.con)} in logs')
+            raise
  
     @staticmethod
     def get_max_datetime(df: pd.DataFrame) -> pd.Timestamp:
@@ -98,6 +103,10 @@ class Preprocess:
             return sum(1 for _ in f) - 1  # subtract 1 for header
 
     @staticmethod
+    def count_rows_json(filepath: str) -> int:
+        return len(pd.read_json(filepath))
+
+    @staticmethod
     def count_rows_excel(filepath: str) -> int:
         wb = openpyxl.load_workbook(filepath, read_only=True)
         sheet = wb.active
@@ -111,6 +120,8 @@ class Preprocess:
     def get_row_count(self, filepath: str, ext: str) -> int:
         if ext == '.csv':
             return self.count_rows_csv(filepath)
+        elif exit == '.json':
+            return self.count_rows_json(filepath)
         elif ext in ['.xls', '.xlsx']:
             return self.count_rows_excel(filepath)
         elif ext == '.parquet':
@@ -144,10 +155,13 @@ class Preprocess:
     def preprocess(self):
         #1. Read raw file directory and obtain file list
         for file in self.filelist:
-            if file in self.preprocessed_files:
-                print(f'{file} exists in logs, skipping..')
-                continue
             self.file = file
+            fname = file.split('\\')[-1]
+            print(f'Generating checksum for {fname}')
+            self.checksum = xxhash64_for_file(self.file)
+            if self.checksum == self.preprocessed_files.get(fname,''):
+                print(f'{file} with exact checksum {self.checksum} exists in logs, skipping..')
+                continue
             print(f'Reading "{file}"')
             ext = os.path.splitext(file)[1].lower()
             row_count = self.get_row_count(file, ext)
@@ -164,6 +178,8 @@ class Preprocess:
                 print(f"{file} is small with ({row_count} rows or non-csv). Loading fully.")
                 if ext == '.csv':
                     df = pd.read_csv(file)
+                elif ext == '.json':
+                    df = pd.read_json(file)
                 elif ext in ['.xls', '.xlsx']:
                     df = pd.read_excel(file)
                 elif ext == '.parquet':
@@ -175,7 +191,8 @@ class Preprocess:
             
             if flag:
                 #Log successful processing of file
-                values = f"('{file}', '{self.tablename}', '{str(pd.Timestamp.now())}')"
+                
+                values = f"('{fname}', '{self.tablename}', '{self.checksum}','{str(pd.Timestamp.now())}')"
                 cur = self.con.cursor()
                 cur.execute(f"INSERT INTO preprocess_log VALUES {values}")
                 self.con.commit()

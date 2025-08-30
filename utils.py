@@ -4,6 +4,7 @@ import re
 import json
 from sqlalchemy import create_engine, text
 import pandas as pd
+import xxhash
 
 def get_engine(config_path="config/.env"):
         with open(config_path, "r") as file:
@@ -267,3 +268,10 @@ def elementwise_nonmissing(df_list):
                     if pd.isnull(anchor_df.iloc[row_idx,col_idx]):
                         anchor_df.iloc[row_idx,col_idx] =  df.iloc[row_idx,col_idx]
     return anchor_df
+
+def xxhash64_for_file(path, block_size=8 * 1024 * 1024):  # 8 MB chunks
+    hasher = xxhash.xxh64()
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(block_size), b''):
+            hasher.update(chunk)
+    return hasher.hexdigest()

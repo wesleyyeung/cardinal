@@ -95,9 +95,18 @@ class Clean:
                     self.con.commit()
                     self.cleaner_initialized = False #reset for next table
                     print('Complete!')
+                    cur = self.preprocess_con.cursor()
+                    cur.execute(f"DROP TABLE {table}")
+                    self.preprocess_con.commit()
+                    print('Table cleaned from preprocess database')
                 except Exception as e:
                     warnings.warn(f"Failed to preprocess {self.tablename} due to {e}, skipping...")
                     raise
+        print('Complete! Cleaning up...')
+        cur = self.preprocess_con.cursor()
+        cur.execute(f"VACUUM;")
+        self.preprocess_con.commit()
+        print('preprocess database cleaned')
 
     def exit(self):
         self.con.close()

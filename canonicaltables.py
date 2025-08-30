@@ -3,11 +3,15 @@ import os
 import json
 import pandas as pd
 
-files = glob.glob("../raw/*.csv")
-files += glob.glob("../raw/*.xlsx")
-files += glob.glob("../raw/*.parquet")
+with open('config/config.json','r') as file:
+    conf = json.load(file)
 
-tables = [file.split('/')[-1].replace('.csv','').replace('.xlsx','').replace('.parquet','') for file in files]
+files = glob.glob(f"{conf['raw_path']}/*.csv")
+files += glob.glob(f"{conf['raw_path']}/*.xlsx")
+files += glob.glob(f"{conf['raw_path']}/*.parquet")
+files += glob.glob(f"{conf['raw_path']}/*.json")
+
+tables = [file.split('\\')[-1].replace('.csv','').replace('.xlsx','').replace('.parquet','').replace('.json','') for file in files]
 table_dict = {}
 df_dict = {}
 for table,file in zip(tables,files):
@@ -15,6 +19,8 @@ for table,file in zip(tables,files):
     ext = os.path.splitext(file)[1].lower()
     if ext == '.csv':
         df_dict[table] = pd.read_csv(file,nrows=0)
+    elif ext == '.json':
+        df_dict[table] = pd.read_json(file,nrows=0)
     elif ext in ['.xls', '.xlsx']:
         df_dict[table] = pd.read_excel(file,nrows=0)
     elif ext == '.parquet':

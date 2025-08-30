@@ -7,7 +7,8 @@ class EHRPatientCleaner(BaseCleaner):
         super().__init__()
 
     def custom_clean(self, df: pd.DataFrame) -> pd.DataFrame:
-        self.dt_cols = [col for col in df.columns if ('dt' in col.lower() or 'onset' in col.lower())]
+        self.dt_cols = [col for col in df.columns if ('dt' in col.lower() or 'onset' in col.lower() or 'dob' in col.lower())]
+        df = df[['mrn_sha1','dob','gender','death_indicator','ethnicity_race','first_followup_dt','last_followup_dt','db_source','last_encounter_location']]
         df['death_indicator'] = pd.to_datetime(df['death_indicator'],errors='coerce')
         df['gender'] = df['gender'].replace({'1':np.nan,'2':np.nan,'F':'Female','M':'Male','U':'Unknown'})
         df['ethnicity_race'] = df['ethnicity_race'].replace({'C':'Chinese','CA':'Caucasian','CN':'Chinese','EU':'Eurasian','I':'Indian','IN':'Indian','M':'Malay','MY':'Malay','N':np.nan,'O':'Others','S':'Sikh','SK':'Sikh','XX':'Unknown'})

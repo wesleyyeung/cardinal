@@ -1,7 +1,6 @@
 import pandas as pd
 from cleaning.base_cleaner import BaseCleaner
 from utils import parse_medication_instruction, medication_type_cleaner
-import sqlite3
 
 class EHRDTSDischargeMedicationCleaner(BaseCleaner):
     

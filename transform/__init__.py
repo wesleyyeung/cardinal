@@ -1,6 +1,6 @@
 from transform.cis.caglesion_pivot import CISCagLesionPivot
 from transform.cis.echo_valvelesion import CISEchoValveLesion
-from transform.ehr.encounter_dxgroups import EHREncounterDxGroups
+from transform.ehr.encounter_diagnosis import EHREncounterDiagnosis
 
 TRANSFORM_REGISTRY = {
     'cis': {
@@ -8,6 +8,6 @@ TRANSFORM_REGISTRY = {
         'echo': CISEchoValveLesion()
     },
     'ehr': {
-        'encounter': EHREncounterDxGroups()
+        'encounter': EHREncounterDiagnosis()
     }
 }

@@ -33,6 +33,12 @@ from cleaning.ehr.edw_laboratory_cleaner import EHREDWLaboratoryCleaner
 from cleaning.ehr.problem_list_cleaner import EHRProblemListCleaner
 from cleaning.ehr.patient_cleaner import EHRPatientCleaner
 from cleaning.ehr.encounter_cleaner import EHREncounterCleaner
+from cleaning.ehr.comorbidities_cleaner import EHRComorbiditiesCleaner
+
+from cleaning.ehr.radiology_cleaner import EHRRadiologyCleaner
+from cleaning.ehr.surgery_cleaner import EHRSurgeryCleaner
+
+from cleaning.ehr.vitals_cleaner import EHRFlowsheetVitalsCleaner
 
 with open('config/config.json','r') as file:
     conf = json.load(file)
@@ -71,9 +77,13 @@ CLEANER_REGISTRY = {
         "edw_outpatient_medication": EHREDWOutpatientMedicationCleaner(destination_schema="ehr", destination_tablename="medication",join_df=enc_df),
         "dts_laboratory": EHRDTSLaboratoryCleaner(destination_schema="ehr", destination_tablename="lab"),
         "edw_laboratory": EHREDWLaboratoryCleaner(destination_schema="ehr", destination_tablename="lab",join_df=enc_df),
-        "problem_list": EHRProblemListCleaner(),
+        "problem_list": EHRProblemListCleaner(destination_schema="ehr", destination_tablename="diagnosis"),
         "patient": EHRPatientCleaner(),
-        "encounter": EHREncounterCleaner()
+        "comorbidities": EHRComorbiditiesCleaner(destination_schema="ehr", destination_tablename="comorbidities"),
+        "encounter": EHREncounterCleaner(),
+        "dts_radiology": EHRRadiologyCleaner(), 
+        "dts_surgeries": EHRSurgeryCleaner(destination_schema="ehr",destination_tablename="surgeries"),
+        "vitals": EHRFlowsheetVitalsCleaner(destination_schema="ehr", destination_tablename="flowsheet"),
     },
     "ecg": {
         "iecg": ECGiECGCleaner(),

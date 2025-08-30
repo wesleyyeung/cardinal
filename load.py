@@ -56,6 +56,10 @@ class Load:
                 cur = self.con.cursor()
                 cur.execute(f"INSERT INTO load_log VALUES {values}")
                 self.con.commit()
+                #Remove from clean database
+                cur = self.clean_con.cursor()
+                cur.execute(f"DROP TABLE {table}")
+                self.con.commit()
             except Exception as e:
                 print(f"Failed to load due to {e}, skipping...")
                 #Rollback changes
@@ -64,8 +68,11 @@ class Load:
                     query(query_string,return_df=False)
                 except Exception as e:
                     print(f'Failed to drop existing table due to {e}')
-
-        print("All tables loaded.")
+        print("All tables loaded. Cleaning up...")
+        #Remove from clean database
+        cur = self.clean_con.cursor()
+        cur.execute(f"VACUUM;")
+        self.con.commit()
 
     def exit(self):
         self.con.close()

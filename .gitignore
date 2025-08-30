@@ -13,3 +13,4 @@ edw_strings.yml
 errors.txt
 data/
 code_filtering/
+*.ipynb

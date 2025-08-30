@@ -6,7 +6,7 @@ from utils import has_any_code
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-class EHREncounterDxGroups(BaseTransform):
+class EHREncounterDiagnosis(BaseTransform):
     
     def __init__(self):
         super().__init__()
@@ -49,4 +49,4 @@ class EHREncounterDxGroups(BaseTransform):
    
         df['death'] = df['visit_outcome'].isin(['Death Coroners','Death Non-Coroners','Deceased']).astype(int)
         cols = ['visit_id','mrn_sha1','visit_date','location','sub_location','combined_diagnosis'] + dx_keys + ['death']
-        return "derived", df[cols], "dxgroups"
+        return "derived", df[cols], "diagnosis"
