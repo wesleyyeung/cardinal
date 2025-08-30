@@ -6,8 +6,7 @@ __pycache__
 .env
 archive
 test.ipynb
-config.yml
-canonical_tablenames.yml
+config.json
 *.xlsx
 dts_strings.yml
 edw_strings.yml

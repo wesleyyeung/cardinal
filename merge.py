@@ -139,7 +139,8 @@ class Merge:
 
                 for table in tables:
                     result = conn.execute(text(f'SELECT COUNT(*) FROM "{staging_schema}"."{table}"'))
-                    print(f"{table}: {result.scalar()} rows")
+                    nrows = result.scalar()
+                    print(f"{table}: {nrows} rows")
                     print(f"Batch inserting from {table} into {final_table}")
                     offset = 0
                     chunk_no = 0
@@ -161,7 +162,7 @@ class Merge:
                         if result.rowcount == 0:
                             break
                         offset += batch_size
-                        print(f'{(chunk_no+1)*10000}/{result.scalar()}')
+                        print(f'{(chunk_no+1)*batch_size}/{nrows}')
                 
                 result = conn.execute(text(f'SELECT COUNT(*) FROM {final_table}'))
                 print(f"{final_table}: {result.scalar()} rows after insert")
