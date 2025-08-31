@@ -79,10 +79,10 @@ CLEANER_REGISTRY = {
         "edw_laboratory": EHREDWLaboratoryCleaner(destination_schema="ehr", destination_tablename="lab",join_df=enc_df),
         "problem_list": EHRProblemListCleaner(destination_schema="ehr", destination_tablename="diagnosis"),
         "patient": EHRPatientCleaner(),
-        "comorbidities": EHRComorbiditiesCleaner(destination_schema="ehr", destination_tablename="comorbidities"),
+        "patient": EHRComorbiditiesCleaner(destination_schema="ehr", destination_tablename="comorbidities"),
         "encounter": EHREncounterCleaner(),
-        "dts_radiology": EHRRadiologyCleaner(), 
-        "dts_surgeries": EHRSurgeryCleaner(destination_schema="ehr",destination_tablename="surgeries"),
+        "radiology": EHRRadiologyCleaner(), 
+        "surgery": EHRSurgeryCleaner(destination_schema="ehr",destination_tablename="surgeries"),
         "vitals": EHRFlowsheetVitalsCleaner(destination_schema="ehr", destination_tablename="flowsheet"),
     },
     "ecg": {

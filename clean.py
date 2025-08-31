@@ -64,10 +64,10 @@ class Clean:
             else:
                 try:
                     #Count rows
-                    query = f"SELECT COUNT(*) AS rows FROM '{table}'"
+                    query = f"SELECT COUNT(DISTINCT *) AS rows FROM '{table}'"
                     nrows = pd.read_sql_query(query, self.preprocess_con)['rows'].iloc[0]
                     #Read data
-                    query = f"SELECT * FROM '{table}'"
+                    query = f"SELECT DISTINCT * FROM '{table}'"
                     # Read in chunks
                     for n, chunk in enumerate(pd.read_sql_query(query, self.preprocess_con, chunksize=self.chunksize)):
                         print(f"Processing {n*self.chunksize}/{nrows} rows")
@@ -96,7 +96,7 @@ class Clean:
                     self.cleaner_initialized = False #reset for next table
                     print('Complete!')
                     cur = self.preprocess_con.cursor()
-                    cur.execute(f"DROP TABLE {table}")
+                    cur.execute(f"DROP TABLE '{table}'")
                     self.preprocess_con.commit()
                     print('Table cleaned from preprocess database')
                 except Exception as e:

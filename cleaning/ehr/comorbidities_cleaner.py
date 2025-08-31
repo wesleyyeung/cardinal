@@ -3,8 +3,8 @@ import pandas as pd
 from cleaning.base_cleaner import BaseCleaner
 
 class EHRComorbiditiesCleaner(BaseCleaner):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, destination_schema=None, destination_tablename=None):
+        super().__init__(destination_schema=destination_schema,destination_tablename=destination_tablename)
 
     def custom_clean(self, df: pd.DataFrame) -> pd.DataFrame:
         self.dt_cols = [col for col in df.columns if ('dt' in col.lower() or 'onset' in col.lower())]

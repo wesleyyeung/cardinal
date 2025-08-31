@@ -2,12 +2,15 @@ import numpy as np
 import pandas as pd
 from cleaning.base_cleaner import BaseCleaner
 import sqlite3
+import json
 
 class EHREDWLaboratoryCleaner(BaseCleaner):
     
     def __init__(self, destination_schema=None, destination_tablename=None,join_df=None):
         super().__init__(destination_schema=destination_schema,destination_tablename=destination_tablename)
-        preprocess_con = sqlite3.connect("data/preprocess.db")
+        with open('config/config.json','r') as file:
+            conf = json.load(file)
+        preprocess_con = sqlite3.connect(f"{conf['data_path']}/preprocess.db")
         self.enc = join_df
         self.enc = self.enc[self.enc['visit_id'].str.contains('edw')]
         self.enc.loc[:,'visit_id'] = self.enc['visit_id'].str.replace('edw_','').astype(int)
