@@ -29,7 +29,7 @@ class Preprocess:
             
         self.con = sqlite3.connect(f"{self.conf['data_path']}/preprocess.db")
         cur = self.con.cursor()
-        cur.execute("CREATE TABLE IF NOT EXISTS preprocess_log(filename, tablename, checksum, datetime)")
+        cur.execute("CREATE TABLE IF NOT EXISTS preprocess_log(filename, tablename, rowcount, checksum, datetime)")
         self.con.commit()
 
         self.threshold = threshold
@@ -191,8 +191,7 @@ class Preprocess:
             
             if flag:
                 #Log successful processing of file
-                
-                values = f"('{fname}', '{self.tablename}', '{self.checksum}','{str(pd.Timestamp.now())}')"
+                values = f"('{fname}', '{self.tablename}', '{row_count}', '{self.checksum}', '{str(pd.Timestamp.now())}')"
                 cur = self.con.cursor()
                 cur.execute(f"INSERT INTO preprocess_log VALUES {values}")
                 self.con.commit()
