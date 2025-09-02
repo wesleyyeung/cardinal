@@ -143,7 +143,6 @@ class Merge:
                     print(f"{table}: {nrows} rows")
                     print(f"Batch inserting from {table} into {final_table}")
                     offset = 0
-                    chunk_no = 0
                     while True:
                         select_clause = ', '.join(
                             f'CAST("{col}" AS {type_map[col]}) AS "{col}"'
@@ -162,7 +161,7 @@ class Merge:
                         if result.rowcount == 0:
                             break
                         offset += batch_size
-                        print(f'{(chunk_no+1)*batch_size}/{nrows}')
+                        print(f'{offset}/{nrows}')
                 
                 result = conn.execute(text(f'SELECT COUNT(*) FROM {final_table}'))
                 print(f"{final_table}: {result.scalar()} rows after insert")

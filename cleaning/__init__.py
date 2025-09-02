@@ -33,7 +33,6 @@ from cleaning.ehr.edw_laboratory_cleaner import EHREDWLaboratoryCleaner
 from cleaning.ehr.problem_list_cleaner import EHRProblemListCleaner
 from cleaning.ehr.patient_cleaner import EHRPatientCleaner
 from cleaning.ehr.encounter_cleaner import EHREncounterCleaner
-from cleaning.ehr.comorbidities_cleaner import EHRComorbiditiesCleaner
 
 from cleaning.ehr.radiology_cleaner import EHRRadiologyCleaner
 from cleaning.ehr.surgery_cleaner import EHRSurgeryCleaner
@@ -79,7 +78,6 @@ CLEANER_REGISTRY = {
         "edw_laboratory": EHREDWLaboratoryCleaner(destination_schema="ehr", destination_tablename="lab",join_df=enc_df),
         "problem_list": EHRProblemListCleaner(destination_schema="ehr", destination_tablename="diagnosis"),
         "patient": EHRPatientCleaner(),
-        "patient": EHRComorbiditiesCleaner(destination_schema="ehr", destination_tablename="comorbidities"),
         "encounter": EHREncounterCleaner(),
         "radiology": EHRRadiologyCleaner(), 
         "surgery": EHRSurgeryCleaner(destination_schema="ehr",destination_tablename="surgeries"),

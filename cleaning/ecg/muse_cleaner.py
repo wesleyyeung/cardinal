@@ -33,7 +33,7 @@ class ECGMuseCleaner(BaseCleaner):
 
         df = df.rename(columns=remap_dict) 
         df['filename'] = df['Folder'] + '/' + df['Filename']
-        df['ecg_time'] = pd.to_datetime(df['RestingECG/TestDemographics/AcquisitionDate'] + ' ' + df['RestingECG/TestDemographics/AcquisitionTime'], format='%Y-%m-%d %H:%M:%S')
+        df['ecg_time'] = pd.to_datetime(df['RestingECG/TestDemographics/AcquisitionDate'] + ' ' + df['RestingECG/TestDemographics/AcquisitionTime'], format='%m-%d-%Y %H:%M:%S')
         
         selected_cols = [
             'filename',

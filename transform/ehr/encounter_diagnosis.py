@@ -20,7 +20,7 @@ class EHREncounterDiagnosis(BaseTransform):
             code_categories = json.load(file)
 
         for db in db_keys:
-            codes = code_categories['diagnosis_codes'][db]['codes'] #get numeric codes per database
+            codes = code_categories[db] #get numeric codes per database
             combined_codes[db] = {}
             for dx in codes.keys():
                 combined_codes[db][dx] = codes.get(dx)
@@ -48,5 +48,5 @@ class EHREncounterDiagnosis(BaseTransform):
                 df.loc[df['db_source']==db,dx] = output
    
         df['death'] = df['visit_outcome'].isin(['Death Coroners','Death Non-Coroners','Deceased']).astype(int)
-        cols = ['visit_id','mrn_sha1','visit_date','location','sub_location','combined_diagnosis'] + dx_keys + ['death']
+        cols = ['visit_id','subject_id','visit_date','location','sub_location','combined_diagnosis'] + dx_keys + ['death']
         return "derived", df[cols], "diagnosis"

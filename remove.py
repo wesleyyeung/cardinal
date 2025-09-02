@@ -17,7 +17,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.where in ['preprocess','load','clean']:
-        db_location = f'{conf['data_path']}/{args.where}.db'
+        db_location = f'{conf["data_path"]}/{args.where}.db'
         con = sqlite3.connect(db_location)
         
         try:

@@ -24,6 +24,18 @@ class Load:
     def load(self):
         clean_tables = pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table' AND name != 'clean_log'",self.clean_con)['name'].tolist()    
         print(f"Found the following cleaned files: {clean_tables}")
+
+        datasets = []
+        for table in clean_tables:
+            dataset, _ = infer_dataset_tablename(table)
+            datasets += [dataset]
+        datasets = list(set(datasets))
+        for dataset in datasets:
+            SCHEMA = f"staging_{dataset}"
+            print(F"Cleaning up existing staging schema: {SCHEMA}")
+            query(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE;",return_df=False)
+            print("Done")
+
         for table in clean_tables:
             dataset, tablename = infer_dataset_tablename(table)
             if dataset == self.specify_schema:
@@ -35,6 +47,7 @@ class Load:
                     print(f'{tablename} exists in logs, skipping..')
                     continue
             SCHEMA = f"staging_{dataset}"
+            query(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA};",return_df=False)
             try:
                 print(f"Loading {table} → {SCHEMA}.{tablename}")
                 print("Counting number of rows")
@@ -55,10 +68,6 @@ class Load:
                 values = f"('{dataset}', '{tablename}', '{str(pd.Timestamp.now())}')"
                 cur = self.con.cursor()
                 cur.execute(f"INSERT INTO load_log VALUES {values}")
-                self.con.commit()
-                #Remove from clean database
-                cur = self.clean_con.cursor()
-                cur.execute(f"DROP TABLE {table}")
                 self.con.commit()
             except Exception as e:
                 print(f"Failed to load due to {e}, skipping...")

@@ -197,7 +197,7 @@ class CISEchoValveLesion(BaseTransform):
         super().__init__()
 
     def custom_transform(self, df: pd.DataFrame) -> tuple:
-        df = df[['idref','study_num','procedure_date','finaldxcollated']]
+        df = df[['subject_id','study_id','procedure_date','finaldxcollated']]
         evtp = EchoValveTextParser()
         valve_lesions = df['finaldxcollated'].apply(lambda row: evtp.parse(row)).tolist()
         valve_lesions = pd.DataFrame(valve_lesions)

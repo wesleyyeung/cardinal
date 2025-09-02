@@ -28,7 +28,7 @@ class Transforms:
                 continue
             df = pd.read_sql_query(f"SELECT * FROM '{table}'",self.con)
             schema, df, suffix = self.transformation(df)
-            df.to_sql(f"{schema}_{tablename}_{suffix}",if_exists="append",index=False)
+            df.to_sql(f"{schema}.{tablename}_{suffix}",self.con,if_exists="append",index=False)
 
     def exit(self):
         self.con.close()

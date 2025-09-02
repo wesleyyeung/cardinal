@@ -43,12 +43,15 @@ class Clean:
             print(f"Found the following cleaned tables: {self.cleaned_tables}")
         except Exception as e:
             warnings.warn(f"Unable to load cleaned tables due to {e}")
+        self.tables_to_drop = []
 
     def get_cleaner(self, dataset: str, tablename: str):
         cleaner = CLEANER_REGISTRY.get(dataset,{}).get(tablename,None)
         if cleaner is None:
             warnings.warn(f"No cleaner found for table: {tablename}")
-        self.cleaner = cleaner.clean # type: ignore
+            self.cleaner = None
+        else:
+            self.cleaner = cleaner.clean # type: ignore
         
     def clean(self):
         #Load file manifest from preprocess SQLite database
@@ -62,23 +65,25 @@ class Clean:
                 print(f"Cleaned file for {table} found, skipping.")
                 continue
             else:
+                # Get appropriate cleaner based on table type (only once, outside the loop)
+                if not hasattr(self, 'cleaner_initialized') or not self.cleaner_initialized:
+                    print(f'Finding cleaner for dataset:{self.dataset}, table:{self.tablename}')
+                    self.get_cleaner(dataset=self.dataset, tablename=self.tablename)
+                    # Skip if no cleaner
+                    if self.cleaner is None:
+                        print(f"No cleaner found, skipping {table}")
+                        continue
+                    else:
+                        self.cleaner_initialized = True
                 try:
                     #Count rows
-                    query = f"SELECT COUNT(DISTINCT *) AS rows FROM '{table}'"
+                    query = f"SELECT COUNT(*) AS rows FROM '{table}'"
                     nrows = pd.read_sql_query(query, self.preprocess_con)['rows'].iloc[0]
                     #Read data
-                    query = f"SELECT DISTINCT * FROM '{table}'"
+                    query = f"SELECT * FROM '{table}'"
                     # Read in chunks
                     for n, chunk in enumerate(pd.read_sql_query(query, self.preprocess_con, chunksize=self.chunksize)):
                         print(f"Processing {n*self.chunksize}/{nrows} rows")
-                        # Get appropriate cleaner based on table type (only once, outside the loop)
-                        if not hasattr(self, 'cleaner_initialized') or not self.cleaner_initialized:
-                            self.get_cleaner(dataset=self.dataset, tablename=self.tablename)
-                            self.cleaner_initialized = True
-                        # Skip if no cleaner
-                        if self.cleaner is None:
-                            print(f"Skipping {table}")
-                            break
                         # Clean chunk
                         df_cleaned, destination_schema, destination_tablename = self.cleaner(chunk)
                         # Allow cleaner module to override schema/tablename
@@ -87,26 +92,31 @@ class Clean:
                         if destination_tablename is not None:
                             self.tablename = destination_tablename
                         # Append to output table
+                        df_cleaned = df_cleaned.drop_duplicates()
                         df_cleaned.to_sql(self.dataset + '.' + self.tablename,con=self.con,if_exists='append',index=False)
                     #Log successful processing of file
-                    values = f"('{original_dataset}', '{original_tablename}', '{str(pd.Timestamp.now())}')"
+                    values = f"('{self.dataset}', '{self.tablename}', '{str(pd.Timestamp.now())}')"
                     cur = self.con.cursor()
                     cur.execute(f"INSERT INTO clean_log VALUES {values}")
                     self.con.commit()
                     self.cleaner_initialized = False #reset for next table
                     print('Complete!')
-                    cur = self.preprocess_con.cursor()
-                    cur.execute(f"DROP TABLE '{table}'")
-                    self.preprocess_con.commit()
-                    print('Table cleaned from preprocess database')
+                    self.tables_to_drop += [table]
+                    
                 except Exception as e:
                     warnings.warn(f"Failed to preprocess {self.tablename} due to {e}, skipping...")
                     raise
         print('Complete! Cleaning up...')
+        for table in self.tables_to_drop:
+            print(f'Dropping: {table}')
+            cur = self.preprocess_con.cursor()
+            cur.execute(f"DROP TABLE '{table}'")
+            self.preprocess_con.commit()
+            print('Table cleaned from preprocess database')
         cur = self.preprocess_con.cursor()
         cur.execute(f"VACUUM;")
         self.preprocess_con.commit()
-        print('preprocess database cleaned')
+        print('Preprocess database cleaned')
 
     def exit(self):
         self.con.close()

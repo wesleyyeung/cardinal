@@ -96,10 +96,7 @@ class ECGiECGCleaner(BaseCleaner):
             'restingecgdata/internalmeasurements/crossleadmeasurements/stfrontaxis':'t_axis'  
         }
 
-        df['qrs_onset'] = df[[
-            'restingecgdata/interpretations/interpretation/globalmeasurements/qonset/#text',
-            'restingecgdata/interpretations/interpretation/globalmeasurements/qonset'
-        ]].apply(lambda row: np.nanmin(row),axis=1)
+        df['qrs_onset'] = pd.to_numeric(df['restingecgdata/interpretations/interpretation/globalmeasurements/qonset/#text'],errors='coerce')
 
         df = df.rename(columns=remap_dict)
 

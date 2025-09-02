@@ -11,7 +11,7 @@ class CISCagLesionPivot(BaseTransform):
     def custom_transform(self, df: DataFrame) -> tuple:
         with open('transform/cis/caglesion.json','r') as file:
             caglesion_dict = json.load(file)
-        df = df[['idref','procedure_date','study_num','lesion','stenosis']]
+        df = df[['subject_id','procedure_date','study_id','lesion','stenosis']]
         reverse_mapper = build_reverse_mapper(caglesion_dict)
         df['lesion'] = df['lesion'].apply(lambda row: remap_value_fast(row,reverse_mapper))
         df_exploded = df.explode('lesion')
@@ -20,8 +20,8 @@ class CISCagLesionPivot(BaseTransform):
         pivot_df = df_exploded.pivot(columns='lesion', values='stenosis')
         # Optional: Reset index if you want a clean DataFrame
         pivot_df = pivot_df.reset_index(drop=True)
-        df = df_exploded[['idref','procedure_date','study_num']].merge(pivot_df,left_index=True,right_index=True)
-        df = df.groupby('study_num').max().reset_index()
-        df = df[['idref','procedure_date','study_num']+list(caglesion_dict.keys())].fillna(0)
+        df = df_exploded[['subject_id','procedure_date','study_id']].merge(pivot_df,left_index=True,right_index=True)
+        df = df.groupby('study_id').max().reset_index()
+        df = df[['subject_id','procedure_date','study_id']+list(caglesion_dict.keys())].fillna(0)
         return "derived", df, "pivoted"
         
