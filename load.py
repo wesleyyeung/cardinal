@@ -52,6 +52,7 @@ class Load:
                 print(f"Loading {table} → {SCHEMA}.{tablename}")
                 print("Counting number of rows")
                 nrows = pd.read_sql_query(f"SELECT COUNT(*) AS nrow FROM '{table}'",self.clean_con)['nrow'].iloc[0]
+                print(f"Found {nrows } rows")
                 print("Reading table from clean.db")
                 reader = pd.read_sql_query(f"SELECT * FROM '{table}'",self.clean_con,chunksize=self.chunksize)
                 #Load by chunk
@@ -64,6 +65,8 @@ class Load:
                         if_exists='append',
                         index=False
                     )
+                final_rows = pd.read_sql_query(f"SELECT COUNT(*) FROM {SCHEMA}.{tablename}",con=self.engine)
+                assert nrows == final_rows, "Final row count different from initial row count!"
                 #Log to database                
                 values = f"('{dataset}', '{tablename}', '{str(pd.Timestamp.now())}')"
                 cur = self.con.cursor()
