@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 import warnings
 warnings.filterwarnings('ignore', message="^Columns.*")
 warnings.filterwarnings('ignore', message="A value is trying to be set on a copy of a slice from a DataFrame")
@@ -9,7 +10,10 @@ import sqlite3
 
 class Clean:
 
-    def __init__(self):
+    def __init__(self,clean_up: bool = False):
+        
+        self.clean_up = clean_up
+
         with open('config/config.json','r') as file:
             self.conf = json.load(file)
         print('Connecting to clean SQLite database')
@@ -36,7 +40,8 @@ class Clean:
             if mismatch:
                 raise ValueError(f"Known schema config file does not match cleaner registry: {mismatch}")
 
-        self.cleaned_tables = []
+        self.preprocessed_tables = pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table' AND name != 'preprocess_log'",self.preprocess_con)['name'].tolist()
+        print(f'Found the following preprocessed tables: {self.preprocessed_tables}')
         try:
             print('Loading cleaned tables from the log...')
             self.cleaned_tables = pd.read_sql_query("SELECT tablename FROM clean_log",self.con)['tablename'].tolist()
@@ -55,8 +60,7 @@ class Clean:
         
     def clean(self):
         #Load file manifest from preprocess SQLite database
-        preprocessed_tables = pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table' AND name != 'preprocess_log'",self.preprocess_con)['name'].tolist()
-        for table in preprocessed_tables:
+        for table in self.preprocessed_tables:
             self.dataset, self.tablename = infer_dataset_tablename(table)
             original_dataset = self.dataset
             original_tablename = self.tablename
@@ -106,17 +110,18 @@ class Clean:
                 except Exception as e:
                     warnings.warn(f"Failed to preprocess {self.tablename} due to {e}, skipping...")
                     raise
-        print('Complete! Cleaning up...')
-        for table in self.tables_to_drop:
-            print(f'Dropping: {table}')
+        print('Complete!')
+        if self.clean_up:
+            for table in self.tables_to_drop:
+                print(f'Dropping: {table}')
+                cur = self.preprocess_con.cursor()
+                cur.execute(f"DROP TABLE IF EXISTS '{table}';")
+                self.preprocess_con.commit()
+                print('Table cleaned from preprocess database')
             cur = self.preprocess_con.cursor()
-            cur.execute(f"DROP TABLE '{table}'")
+            cur.execute(f"VACUUM;")
             self.preprocess_con.commit()
-            print('Table cleaned from preprocess database')
-        cur = self.preprocess_con.cursor()
-        cur.execute(f"VACUUM;")
-        self.preprocess_con.commit()
-        print('Preprocess database cleaned')
+            print('Preprocess database cleaned')
 
     def exit(self):
         self.con.close()
@@ -124,6 +129,9 @@ class Clean:
 
 if __name__ == "__main__":
     print('Starting cleaning process...')
-    c = Clean()
+    parser = ArgumentParser()
+    parser.add_argument('--clean_up',action='store_true', default = False,help='Flag to delete table from preprocess.db after cleaning')
+    args = parser.parse_args()
+    c = Clean(args.clean_up)
     c.clean()
     c.exit()

@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from cleaning.base_cleaner import BaseCleaner
 
 class EHRFlowsheetVitalsCleaner(BaseCleaner):
@@ -38,6 +39,7 @@ class EHRFlowsheetVitalsCleaner(BaseCleaner):
             'flow_rate',
             'flow_rate_uom'
         ]]
+        df = df.replace({'""""'},'').replace('',np.nan)
         return df.rename(columns={
             'mrn_sha1':'subject_id'
         })

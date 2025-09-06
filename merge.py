@@ -173,7 +173,7 @@ class Merge:
                     CREATE TABLE {dedup_temp} AS
                     SELECT DISTINCT * FROM {final_table};
                 """))
-                conn.execute(text(f'DROP TABLE {final_table};'))
+                conn.execute(text(f'DROP TABLE "{final_table}";'))
                 conn.execute(text(f'ALTER TABLE {dedup_temp} RENAME TO "{base_name}";'))
                 conn.execute(text(f'ALTER TABLE {base_name} SET SCHEMA {final_schema}'))
 

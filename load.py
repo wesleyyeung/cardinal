@@ -21,12 +21,17 @@ class Load:
         with open('config/config.json','r') as file:
             self.chunksize = json.load(file)['chunksize']
 
-    def load(self):
-        clean_tables = pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table' AND name != 'clean_log'",self.clean_con)['name'].tolist()    
-        print(f"Found the following cleaned files: {clean_tables}")
+        self.clean_tables = pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table' AND name != 'clean_log'",self.clean_con)['name'].tolist()    
+        print(f"Found the following cleaned files: {self.clean_tables}")
+        if self.specify_schema is not None:
+            self.clean_tables = [table for table in self.clean_tables if self.specify_schema in table]
+        if self.specify_tablename is not None:
+            self.clean_tables = [table for table in self.clean_tables if self.specify_tablename in table]
+        print(f"Working on the following cleaned files: {self.clean_tables}")
 
+    def load(self):
         datasets = []
-        for table in clean_tables:
+        for table in self.clean_tables:
             dataset, _ = infer_dataset_tablename(table)
             datasets += [dataset]
         datasets = list(set(datasets))
@@ -36,7 +41,7 @@ class Load:
             query(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE;",return_df=False)
             print("Done")
 
-        for table in clean_tables:
+        for table in self.clean_tables:
             dataset, tablename = infer_dataset_tablename(table)
             if dataset == self.specify_schema:
                 pass
@@ -65,7 +70,7 @@ class Load:
                         if_exists='append',
                         index=False
                     )
-                final_rows = pd.read_sql_query(f"SELECT COUNT(*) FROM {SCHEMA}.{tablename}",con=self.engine)
+                final_rows = pd.read_sql_query(f"SELECT COUNT(*) AS nrow FROM {SCHEMA}.{tablename}",con=self.engine)['nrow'].iloc[0]
                 assert nrows == final_rows, "Final row count different from initial row count!"
                 #Log to database                
                 values = f"('{dataset}', '{tablename}', '{str(pd.Timestamp.now())}')"
